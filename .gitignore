@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.js.map
+*.zip
+*.crdownload
+videoplayback*.mp4
+unnamed.png
+.DS_Store

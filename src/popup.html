@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+  :root {
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 360px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    line-height: 1.5;
+    background: #0d0e12;
+    background-image:
+      radial-gradient(ellipse at 0% 0%, rgba(99,67,210,0.35) 0%, transparent 55%),
+      radial-gradient(ellipse at 100% 100%, rgba(41,128,255,0.2) 0%, transparent 55%);
+    color: #e2e4eb;
+    padding: 14px 14px 10px;
+  }
+
+  /* ─── Header ─── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .logo {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--font-display); font-size: 18px; font-weight: 800;
+    background: linear-gradient(130deg, #c5d5ff 0%, #7c6af5 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .logo-icon { font-size: 17px; -webkit-text-fill-color: initial; }
+  .icon-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    color: #9aa0b8; font-size: 15px; cursor: pointer; padding: 5px 7px;
+    border-radius: 8px; transition: all 0.18s; line-height: 1;
+  }
+  .icon-btn:hover { background: rgba(255,255,255,0.1); color: #c5d5ff; transform: rotate(30deg); }
+
+  /* ─── Primary actions ─── */
+  .primary-row {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 7px; margin-bottom: 7px;
+  }
+  .btn-primary {
+    background: linear-gradient(130deg, #7c6af5 0%, #4f8bff 100%);
+    color: #fff; border: none; border-radius: 9px;
+    padding: 8px 16px; font-size: 12px; font-weight: 700;
+    font-family: var(--font-display); cursor: pointer;
+    transition: all 0.18s ease; text-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    white-space: nowrap;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(124,106,245,0.45); }
+  .btn-primary:disabled { opacity: 0.45; transform: none; box-shadow: none; cursor: default; }
+
+  /* ─── Secondary actions row ─── */
+  .secondary-row {
+    display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .btn-ghost {
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+    color: #b0b8d0; border-radius: 8px; padding: 5px 11px;
+    font-size: 11px; font-weight: 600; font-family: var(--font-display);
+    cursor: pointer; transition: all 0.18s ease; white-space: nowrap;
+  }
+  .btn-ghost:hover { background: rgba(255,255,255,0.1); color: #c5d5ff; border-color: rgba(197,213,255,0.25); }
+  .btn-ghost:disabled { opacity: 0.4; transform: none; cursor: default; }
+  .btn-ghost.danger { color: #f28b82; }
+  .btn-ghost.danger:hover { background: rgba(242,139,130,0.12); border-color: rgba(242,139,130,0.3); color: #f28b82; }
+
+  /* ─── Divider ─── */
+  hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 0 0 10px; }
+
+  /* ─── Status ─── */
+  #status {
+    font-size: 11px; color: #7c6af5; margin-bottom: 8px; min-height: 16px;
+    font-weight: 600; font-family: var(--font-display); letter-spacing: 0.3px;
+    display: flex; align-items: center; gap: 5px;
+  }
+  #status.error { color: #f28b82; }
+  #status:not(:empty)::before { content: '●'; font-size: 7px; opacity: 0.7; }
+
+  /* ─── Search ─── */
+  #search {
+    width: 100%; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 8px; color: #e2e4eb; padding: 7px 11px; font-size: 12px;
+    margin-bottom: 9px; display: none; font-family: var(--font-body);
+    transition: all 0.18s;
+  }
+  #search:focus { outline: none; border-color: #7c6af5; box-shadow: 0 0 0 3px rgba(124,106,245,0.15); background: rgba(255,255,255,0.07); }
+  #search::placeholder { color: #555a70; }
+
+  /* ─── Suggestion Cards ─── */
+  .card {
+    background: rgba(255,255,255,0.04); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.07); border-radius: 11px;
+    padding: 10px 12px; margin-bottom: 7px;
+    border-left: 3px solid #7c6af5;
+    animation: cardIn 200ms ease both;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: rgba(124,106,245,0.5); }
+  .card-header { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+  .group-name {
+    flex: 1; background: transparent; border: 1px solid transparent; border-radius: 6px;
+    color: #e2e4eb; font-size: 13px; font-weight: 600; font-family: var(--font-display);
+    padding: 2px 5px; transition: all 0.18s; outline: none;
+  }
+  .group-name:hover { border-color: rgba(255,255,255,0.1); }
+  .group-name:focus { border-color: #7c6af5; background: rgba(124,106,245,0.08); }
+  .group-color {
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; color: #e2e4eb; font-size: 11px; padding: 2px 4px;
+    outline: none; font-family: var(--font-body); cursor: pointer;
+  }
+  .remove-group {
+    background: transparent; color: #555a70; font-size: 16px; padding: 0 3px;
+    line-height: 1; border-radius: 4px; border: none; cursor: pointer;
+    transition: all 0.18s; text-shadow: none;
+  }
+  .remove-group:hover { color: #f28b82; background: rgba(242,139,130,0.12); transform: none; box-shadow: none; }
+  .tab-list { list-style: none; padding-left: 4px; }
+  .tab-list li { font-size: 11px; color: #7a8099; padding: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tab-list li.search-match { color: #a8b8f0; font-weight: 500; }
+
+  #apply-all {
+    margin-top: 9px; width: 100%; font-size: 13px; padding: 9px;
+    background: linear-gradient(130deg, #7c6af5 0%, #4f8bff 100%);
+    color: #fff; border: none; border-radius: 9px; font-weight: 700;
+    font-family: var(--font-display); cursor: pointer; transition: all 0.18s;
+  }
+  #apply-all:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(124,106,245,0.4); }
+
+  /* ─── Dupes ─── */
+  .dupe-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .dupe-group {
+    background: rgba(242,139,130,0.05); border: 1px solid rgba(242,139,130,0.12);
+    border-radius: 9px; padding: 8px 10px; margin-bottom: 6px;
+  }
+  .dupe-group .dupe-title { font-size: 12px; font-weight: 600; color: #f28b82; margin-bottom: 3px; font-family: var(--font-display); }
+  .dupe-group .dupe-list { font-size: 11px; color: #7a8099; list-style: none; padding-left: 2px; }
+
+  /* ─── Footer ─── */
+  .footer {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 10px; color: #444860; margin-top: 10px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .footer .cost { color: #7c6af5; font-weight: 600; font-family: var(--font-display); font-size: 11px; }
+
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="logo"><span class="logo-icon">🗂️</span> gTabs</div>
+    <button class="icon-btn" id="open-settings" title="Settings">⚙️</button>
+  </div>
+
+  <!-- Primary CTA -->
+  <div class="primary-row">
+    <button class="btn-primary" id="organize">✨ Organize All</button>
+    <button class="btn-ghost" id="organize-ungrouped">Ungrouped Only</button>
+  </div>
+
+  <!-- Secondary actions: all flat, no section -->
+  <div class="secondary-row">
+    <button class="btn-ghost" id="undo">↩️ Undo</button>
+    <button class="btn-ghost" id="find-dupes">🧬 Duplicates</button>
+    <button class="btn-ghost" id="focus-mode" title="Collapse all groups except the active one">🎯 Focus</button>
+    <button class="btn-ghost" id="sort-groups" title="Sort groups alphabetically by domain">🔤 Sort</button>
+    <button class="btn-ghost danger" id="delete-groups" title="Ungroup all grouped tabs in this window">🧹 Clear Groups</button>
+  </div>
+
+  <hr />
+
+  <div id="status"></div>
+  <input type="text" id="search" placeholder="🔎 Search tabs..." />
+  <div id="suggestions"></div>
+  <button id="apply-all" hidden>Apply Groups</button>
+
+  <div id="duplicates-wrapper" hidden>
+    <div class="dupe-controls">
+      <span style="font-size:12px;font-weight:600;color:#e2e4eb;font-family:var(--font-display);">Identical Tabs</span>
+      <button class="btn-ghost danger" id="close-dupes">Close Extras</button>
+    </div>
+    <div id="duplicates"></div>
+  </div>
+
+  <div class="footer">
+    <span id="stats-text"></span>
+    <span id="cost-text" class="cost"></span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

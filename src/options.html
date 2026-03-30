@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>gTabs Settings</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --accent: #7c6af5;
+    --accent-soft: rgba(124,106,245,0.15);
+    --accent-glow: rgba(124,106,245,0.35);
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.07);
+    --border: rgba(255,255,255,0.08);
+    --border-accent: rgba(124,106,245,0.4);
+    --text: #e2e4eb;
+    --text-muted: #7a8099;
+    --text-dim: #444860;
+    --green: #4ade80;
+    --red: #f28b82;
+    --bg: #0d0e12;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Avenir Next", "Segoe UI", "Trebuchet MS", sans-serif;
+  }
+
+  body {
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.6;
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 0% 0%, rgba(99,67,210,0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 100%, rgba(41,128,255,0.15) 0%, transparent 50%);
+    background-attachment: fixed;
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; padding: 44px 24px 60px; }
+
+  /* ─── Page header ─── */
+  .page-header {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 36px;
+  }
+  .logo-mark {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, #7c6af5, #4f8bff);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; box-shadow: 0 4px 20px rgba(124,106,245,0.4);
+    flex-shrink: 0;
+  }
+  h1 {
+    font-family: var(--font-display);
+    font-size: 28px; font-weight: 800;
+    background: linear-gradient(130deg, #c5d5ff 0%, #7c6af5 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .page-header p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ─── Section cards ─── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 24px 28px; margin-bottom: 16px;
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    animation: fadeUp 380ms cubic-bezier(0.16,1,0.3,1) both;
+  }
+  .section-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+  }
+  .section-icon {
+    font-size: 16px; width: 32px; height: 32px; border-radius: 8px;
+    background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  h2 {
+    font-family: var(--font-display); font-size: 14px; font-weight: 700;
+    color: var(--text); letter-spacing: 0.2px;
+  }
+  .section-desc { font-size: 12px; color: var(--text-muted); margin-left: auto; }
+
+  /* ─── GitHub CTA ─── */
+  .github-card {
+    background: linear-gradient(130deg, rgba(124,106,245,0.2), rgba(79,139,255,0.15));
+    border-color: rgba(124,106,245,0.25);
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  }
+  .github-card h2 { font-size: 16px; -webkit-text-fill-color: initial; color: var(--text); }
+  .github-card p { font-size: 13px; color: #9aa8c8; margin-top: 3px; }
+  .github-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #fff; color: #000; text-decoration: none;
+    font-weight: 700; font-family: var(--font-display); font-size: 13px;
+    padding: 9px 18px; border-radius: 9px; white-space: nowrap; flex-shrink: 0;
+    transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+    box-shadow: 0 4px 14px rgba(255,255,255,0.12);
+  }
+  .github-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.22); }
+
+  /* ─── Provider grid ─── */
+  .provider-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px; margin-bottom: 20px;
+  }
+  .provider-card {
+    background: rgba(0,0,0,0.25); border: 1px solid var(--border);
+    border-radius: 11px; padding: 14px 10px; text-align: center;
+    cursor: pointer; transition: all 0.22s cubic-bezier(0.16,1,0.3,1);
+    position: relative; overflow: hidden;
+  }
+  .provider-card::before {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(120deg, transparent 30%, rgba(124,106,245,0.1), transparent 70%);
+    transform: translateX(-160%); transition: transform 0.5s ease;
+  }
+  .provider-card:hover::before { transform: translateX(160%); }
+  .provider-card:hover { border-color: var(--border-accent); background: rgba(124,106,245,0.08); transform: translateY(-2px); }
+  .provider-card.selected {
+    border-color: var(--accent); background: var(--accent-soft);
+    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--accent-glow);
+  }
+  .provider-card.disabled { opacity: 0.3; cursor: not-allowed; }
+  .provider-card .name { font-size: 12px; font-weight: 600; font-family: var(--font-display); color: var(--text); }
+  .provider-card .badge {
+    font-size: 9px; font-weight: 700; font-family: var(--font-display);
+    border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 5px;
+    background: var(--accent); color: #fff;
+  }
+  .provider-card .badge.local { background: #22c55e; }
+  .provider-card .badge.manual { background: #555a70; }
+
+  /* ─── Form elements ─── */
+  .form-group { margin-bottom: 16px; }
+  .form-group:last-child { margin-bottom: 0; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #9aa0b8; margin-bottom: 6px; letter-spacing: 0.3px; }
+  label a { color: var(--accent); text-decoration: none; margin-left: 6px; }
+  label a:hover { text-decoration: underline; }
+  input[type="text"], input[type="password"], input[type="number"], select {
+    width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    border-radius: 9px; color: var(--text); padding: 9px 13px; font-size: 13px;
+    font-family: var(--font-body); transition: all 0.18s;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft); background: rgba(124,106,245,0.05);
+  }
+  select { cursor: pointer; }
+
+  .form-row { display: flex; gap: 12px; align-items: flex-end; }
+  .form-row > .form-group { flex: 1; margin-bottom: 0; }
+  .form-row > .form-action { flex-shrink: 0; padding-bottom: 0; }
+
+  /* ─── Buttons ─── */
+  .btn {
+    background: linear-gradient(130deg, #7c6af5 0%, #4f8bff 100%);
+    color: #fff; border: none; border-radius: 9px; padding: 9px 18px;
+    font-size: 13px; font-weight: 700; font-family: var(--font-display);
+    cursor: pointer; transition: all 0.18s; white-space: nowrap;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 18px var(--accent-glow); }
+  .btn:disabled { opacity: 0.4; transform: none; box-shadow: none; cursor: not-allowed; }
+  .btn-ghost {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-muted); border-radius: 9px; padding: 9px 18px;
+    font-size: 13px; font-weight: 600; font-family: var(--font-display);
+    cursor: pointer; transition: all 0.18s;
+  }
+  .btn-ghost:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.14); }
+  .btn-sm { padding: 7px 14px; font-size: 12px; }
+
+  .test-result { font-size: 12px; font-weight: 600; margin-left: 10px; }
+  .test-result.ok { color: var(--green); }
+  .test-result.fail { color: var(--red); }
+
+  /* ─── Sliders ─── */
+  .slider-group { margin-bottom: 20px; }
+  .slider-group:last-child { margin-bottom: 0; }
+  .slider-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .slider-label { font-size: 13px; font-weight: 500; color: var(--text); }
+  .slider-desc { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
+  .slider-val { font-family: var(--font-display); font-weight: 800; color: var(--accent); font-size: 18px; min-width: 32px; text-align: right; }
+
+  input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
+    background: var(--accent); margin-top: -7px; cursor: pointer;
+    box-shadow: 0 0 10px var(--accent-glow), 0 2px 6px rgba(0,0,0,0.4);
+    transition: transform 0.1s;
+  }
+  input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
+  input[type=range]:focus { outline: none; }
+
+  /* ─── Toggle rows ─── */
+  .toggle-row {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px 16px; background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border); border-radius: 11px;
+    margin-bottom: 10px; transition: border-color 0.18s;
+  }
+  .toggle-row:last-child { margin-bottom: 0; }
+  .toggle-row:hover { border-color: rgba(124,106,245,0.25); }
+  .toggle-row-text { flex: 1; }
+  .toggle-row-text span { font-size: 13px; font-weight: 500; color: var(--text); }
+  .toggle-row-text p { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+  .toggle-switch { position: relative; display: inline-block; width: 42px; height: 23px; flex-shrink: 0; margin-top: 1px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: rgba(255,255,255,0.08); border-radius: 23px;
+    border: 1px solid rgba(255,255,255,0.12); transition: 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+  .toggle-slider::before {
+    position: absolute; content: ''; height: 17px; width: 17px;
+    left: 2px; bottom: 2px; background: #6a7090; border-radius: 50%;
+    transition: 0.25s cubic-bezier(0.16,1,0.3,1);
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--accent-soft); border-color: var(--accent); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(19px); background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
+
+  /* ─── Domain rules ─── */
+  .rule-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .rule-row input { flex: 1; }
+  .rule-row select { width: 130px; }
+
+  /* ─── Data section ─── */
+  .data-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .stats-chip {
+    font-size: 13px; color: var(--text-muted); padding: 12px 14px;
+    background: rgba(0,0,0,0.25); border-radius: 10px;
+    border: 1px dashed rgba(255,255,255,0.08);
+  }
+  .stats-chip strong { color: var(--accent); font-weight: 600; }
+
+  .cost-table {
+    width: 100%; font-size: 12px; margin-top: 14px;
+    border-collapse: collapse; border-radius: 11px; overflow: hidden;
+    background: rgba(0,0,0,0.2);
+  }
+  .cost-table th {
+    text-align: left; color: var(--text-muted); font-weight: 600;
+    padding: 10px 14px; background: rgba(255,255,255,0.03); font-size: 11px; letter-spacing: 0.5px;
+  }
+  .cost-table td { padding: 12px 14px; color: var(--text); border-top: 1px solid var(--border); }
+
+  .hidden { display: none !important; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Page header -->
+  <div class="page-header">
+    <div class="logo-mark">🗂️</div>
+    <div>
+      <h1>gTabs Settings</h1>
+      <p>Configure your AI tab organizer</p>
+    </div>
+  </div>
+
+  <!-- GitHub CTA -->
+  <div class="section github-card" style="animation-delay:0ms">
+    <div>
+      <h2>Love gTabs?</h2>
+      <p>Star the repo to help us keep building — it takes 2 seconds!</p>
+    </div>
+    <a href="https://github.com/vaddisrinivas/gtabs" target="_blank" rel="noopener noreferrer" class="github-btn">
+      ⭐️ Star on GitHub
+    </a>
+  </div>
+
+  <!-- LLM Provider -->
+  <div class="section" style="animation-delay:60ms">
+    <div class="section-header">
+      <div class="section-icon">🤖</div>
+      <h2>LLM Provider</h2>
+    </div>
+    <div class="provider-grid" id="provider-grid"></div>
+
+    <div class="form-group hidden" id="key-row">
+      <label>API Key <a id="signup-link" href="#" target="_blank" hidden>Get free key →</a></label>
+      <input type="password" id="apiKey" placeholder="sk-..." />
+    </div>
+    <div class="form-row" style="margin-top:14px">
+      <div class="form-group">
+        <label>Model</label>
+        <select id="model-select"></select>
+      </div>
+      <div class="form-action" style="display:flex;align-items:center;gap:8px;padding-bottom:0;margin-bottom:0;">
+        <button class="btn btn-sm" id="test-btn">Test</button>
+        <span class="test-result" id="test-result"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Behavior -->
+  <div class="section" style="animation-delay:120ms">
+    <div class="section-header">
+      <div class="section-icon">⚡️</div>
+      <h2>Behavior</h2>
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Max Groups</div>
+          <div class="slider-desc">Limit the number of tab groups AI creates</div>
+        </div>
+        <span class="slider-val" id="maxGroupsVal">6</span>
+      </div>
+      <input type="range" id="maxGroups" min="2" max="15" value="6" />
+    </div>
+
+    <div class="slider-group">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Auto-organize Threshold</div>
+          <div class="slider-desc">Trigger AI when ungrouped tab count reaches this</div>
+        </div>
+        <span class="slider-val" id="thresholdVal">5</span>
+      </div>
+      <input type="range" id="threshold" min="2" max="25" value="5" />
+    </div>
+
+    <div class="slider-group" style="margin-bottom:20px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Title Truncation Length</div>
+          <div class="slider-desc">Max tab title characters sent to the LLM</div>
+        </div>
+        <span class="slider-val" id="maxTitleVal">80</span>
+      </div>
+      <input type="range" id="maxTitleLength" min="20" max="200" value="80" step="5" />
+    </div>
+
+    <div class="slider-group" style="margin-bottom:20px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Stale Tab Age (Hours)</div>
+          <div class="slider-desc">Tabs older than this can be purged via the Focus tool</div>
+        </div>
+        <span class="slider-val" id="staleVal">48</span>
+      </div>
+      <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="autoTrigger" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Auto-organize</span>
+        <p>Silently run AI grouping when ungrouped tabs exceed your threshold.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="mergeMode" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Protect Existing Groups</span>
+        <p>Only organize ungrouped tabs — never reshuffle groups you've already made.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="silentAutoAdd" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Zero-LLM Fast Routing</span>
+        <p>Instantly route new tabs via domain affinity and history — no AI calls.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="autoPinApps" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Auto-pin Web Apps</span>
+        <p>Pin Gmail, Calendar, Jira, Spotify and similar apps to the left automatically.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Domain Rules -->
+  <div class="section" style="animation-delay:180ms">
+    <div class="section-header">
+      <div class="section-icon">🔒</div>
+      <h2>Domain Rules</h2>
+      <span class="section-desc">Always override AI for specific domains</span>
+    </div>
+    <div id="domain-rules"></div>
+    <button class="btn-ghost" style="margin-top:10px;width:100%" id="add-rule">+ Add Rule</button>
+  </div>
+
+  <!-- Data -->
+  <div class="section" style="animation-delay:240ms">
+    <div class="section-header">
+      <div class="section-icon">📊</div>
+      <h2>Data &amp; Usage</h2>
+    </div>
+    <div class="data-actions">
+      <button class="btn-ghost btn-sm" id="export-data">Export Settings</button>
+      <button class="btn-ghost btn-sm" id="import-data">Import Settings</button>
+      <input type="file" id="import-file" accept=".json" hidden />
+    </div>
+    <div class="stats-chip" id="stats-line"></div>
+    <div style="overflow-x:auto">
+      <table class="cost-table" id="cost-table" hidden>
+        <thead><tr><th>Provider</th><th>Input Tokens</th><th>Output Tokens</th><th>Est. Cost</th></tr></thead>
+        <tbody id="cost-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+
+
+</div>
+<script src="options.js"></script>
+</body>
+</html>

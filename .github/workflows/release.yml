@@ -1,0 +1,38 @@
+name: Release
+
+# Trigger: push a version tag like v0.3.1
+# git tag v0.3.1 && git push origin v0.3.1
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm test
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package zip
+        run: npm run package
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gtabs-extension.zip
+          generate_release_notes: true
