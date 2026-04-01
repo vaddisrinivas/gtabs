@@ -386,6 +386,105 @@
     </div>
   </div>
 
+  <!-- Smart Learning -->
+  <div class="section" style="animation-delay:150ms">
+    <div class="section-header">
+      <div class="section-icon">🧠</div>
+      <h2>Smart Learning</h2>
+      <span class="section-desc">Learn from your behavior over time</span>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="enableCorrectionTracking" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Correction Tracking</span>
+        <p>Learn when you rename groups or move tabs before applying — corrections count 3x.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="enableRejectionMemory" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Rejection Memory</span>
+        <p>Remember when you remove suggested groups and avoid repeating those groupings.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="enableGroupDrift" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Group Drift Detection</span>
+        <p>Warn when existing groups become incoherent and may need refreshing.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="enablePatternMining" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Pattern Mining</span>
+        <p>Analyze history to find domains that are frequently grouped together.</p>
+      </div>
+    </div>
+
+    <div class="slider-group" style="margin-top:16px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Drift Threshold</div>
+          <div class="slider-desc">Coherence % below which a group is flagged as drifted</div>
+        </div>
+        <span class="slider-val" id="driftThresholdVal">50</span>
+      </div>
+      <input type="range" id="groupDriftThreshold" min="20" max="80" value="50" step="5" />
+    </div>
+  </div>
+
+  <!-- Scheduled Re-org -->
+  <div class="section" style="animation-delay:165ms">
+    <div class="section-header">
+      <div class="section-icon">📅</div>
+      <h2>Scheduled Re-org</h2>
+      <span class="section-desc">Automatically re-organize on a schedule</span>
+    </div>
+
+    <div class="form-group">
+      <label>Schedule</label>
+      <select id="reorgSchedule">
+        <option value="off">Off</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+      </select>
+    </div>
+
+    <div class="slider-group" style="margin-top:16px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Time of Day</div>
+          <div class="slider-desc">Hour (0-23) when scheduled re-org runs</div>
+        </div>
+        <span class="slider-val" id="reorgTimeVal">9</span>
+      </div>
+      <input type="range" id="reorgTime" min="0" max="23" value="9" />
+    </div>
+  </div>
+
+  <!-- Pinned Groups -->
+  <div class="section" style="animation-delay:175ms">
+    <div class="section-header">
+      <div class="section-icon">📌</div>
+      <h2>Pinned Groups</h2>
+      <span class="section-desc">These groups survive re-organization</span>
+    </div>
+    <div id="pinned-groups"></div>
+    <div class="form-row" style="margin-top:10px">
+      <div class="form-group">
+        <input type="text" id="new-pinned-group" placeholder="Group name to pin" />
+      </div>
+      <div class="form-action">
+        <button class="btn-ghost btn-sm" id="add-pinned">+ Pin</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Domain Rules -->
   <div class="section" style="animation-delay:180ms">
     <div class="section-header">

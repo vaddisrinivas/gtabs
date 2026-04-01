@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildPrompt, parseResponse, suggest, truncateTitle, applyDomainRules, findDuplicates } from '../src/grouper';
-import type { TabInfo, AffinityMap, DomainRule } from '../src/types';
+import {
+  buildPrompt, parseResponse, suggest, truncateTitle, applyDomainRules,
+  findDuplicates, inferTargetGroup, tokenizeTitle, titleGroupSimilarity, matchTabsToExistingGroups,
+} from '../src/grouper';
+import type { TabInfo, AffinityMap, DomainRule, WeightedAffinityMap, RejectionEntry } from '../src/types';
 import { DEFAULT_SETTINGS, COLORS } from '../src/types';
 
 const TEST_SETTINGS = { ...DEFAULT_SETTINGS, provider: 'openai', baseUrl: 'https://api.test.com/v1', apiKey: 'test', model: 'test-model' };
@@ -498,5 +501,146 @@ describe('suggest', () => {
     const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
     expect(body.messages[0].role).toBe('system');
     expect(body.messages[0].content).toContain('tab organizer');
+  });
+});
+
+// ---------- inferTargetGroup (enhanced) ----------
+
+describe('inferTargetGroup with weighted affinity', () => {
+  const rules: DomainRule[] = [{ domain: 'pinned.com', groupName: 'Pinned', color: 'red' }];
+
+  it('domain rules take highest priority', () => {
+    const weighted: WeightedAffinityMap = {
+      'pinned.com': { groups: { 'Other': { count: 100, lastUsed: Date.now() } } },
+    };
+    const result = inferTargetGroup('https://pinned.com/page', rules, {}, weighted);
+    expect(result?.name).toBe('Pinned');
+  });
+
+  it('uses path-level weighted affinity', () => {
+    const weighted: WeightedAffinityMap = {
+      'github.com/myorg': { groups: { 'MyOrg Dev': { count: 5, lastUsed: Date.now() } } },
+      'github.com': { groups: { 'Dev': { count: 10, lastUsed: Date.now() } } },
+    };
+    const result = inferTargetGroup('https://github.com/myorg/repo', [], {}, weighted);
+    expect(result?.name).toBe('MyOrg Dev');
+  });
+
+  it('falls back to domain-level weighted affinity', () => {
+    const weighted: WeightedAffinityMap = {
+      'github.com': { groups: { 'Dev': { count: 5, lastUsed: Date.now() } } },
+    };
+    const result = inferTargetGroup('https://github.com/anything', [], {}, weighted);
+    expect(result?.name).toBe('Dev');
+  });
+
+  it('skips rejected groups', () => {
+    const now = Date.now();
+    const weighted: WeightedAffinityMap = {
+      'news.com': { groups: {
+        'Dev': { count: 10, lastUsed: now },
+        'News': { count: 5, lastUsed: now },
+      } },
+    };
+    const rejections: RejectionEntry[] = [
+      { timestamp: now, domain: 'news.com', rejectedGroup: 'Dev' },
+    ];
+    const result = inferTargetGroup('https://news.com/article', [], {}, weighted, rejections);
+    expect(result?.name).toBe('News');
+  });
+
+  it('falls back to flat affinity', () => {
+    const result = inferTargetGroup('https://example.com', [], { 'example.com': 'Work' });
+    expect(result?.name).toBe('Work');
+  });
+});
+
+// ---------- tokenizeTitle ----------
+
+describe('tokenizeTitle', () => {
+  it('tokenizes basic title', () => {
+    expect(tokenizeTitle('GitHub - My Project')).toEqual(['github', 'project']);
+  });
+
+  it('filters short words', () => {
+    expect(tokenizeTitle('a to the dev')).toEqual(['the', 'dev']);
+  });
+
+  it('handles empty string', () => {
+    expect(tokenizeTitle('')).toEqual([]);
+  });
+});
+
+// ---------- titleGroupSimilarity ----------
+
+describe('titleGroupSimilarity', () => {
+  it('returns 0 for no overlap', () => {
+    expect(titleGroupSimilarity('GitHub Repository', 'Shopping Cart')).toBe(0);
+  });
+
+  it('returns positive for overlap', () => {
+    expect(titleGroupSimilarity('React Development Tutorial', 'Development')).toBeGreaterThan(0);
+  });
+
+  it('returns 0 for empty inputs', () => {
+    expect(titleGroupSimilarity('', 'Dev')).toBe(0);
+  });
+});
+
+// ---------- matchTabsToExistingGroups ----------
+
+describe('matchTabsToExistingGroups', () => {
+  it('matches tabs to groups by title similarity', () => {
+    const testTabs: TabInfo[] = [
+      { id: 1, title: 'React Development Guide', url: 'https://react.dev' },
+      { id: 2, title: 'Amazon Shopping Cart', url: 'https://amazon.com' },
+    ];
+    const { matched, remaining } = matchTabsToExistingGroups(testTabs, ['Development', 'Shopping']);
+    expect(matched.get('Development')?.length).toBe(1);
+    expect(matched.get('Shopping')?.length).toBe(1);
+    expect(remaining).toHaveLength(0);
+  });
+
+  it('puts unmatched tabs in remaining', () => {
+    const testTabs: TabInfo[] = [
+      { id: 1, title: 'Random Page', url: 'https://example.com' },
+    ];
+    const { matched, remaining } = matchTabsToExistingGroups(testTabs, ['Development']);
+    expect(matched.size).toBe(0);
+    expect(remaining).toHaveLength(1);
+  });
+});
+
+// ---------- buildPrompt with extra hints ----------
+
+describe('buildPrompt with extra hints', () => {
+  it('includes correction hints', () => {
+    const prompt = buildPrompt(tabs, 5, {}, 80, '', {
+      corrections: '\nUser corrections:\n  corrected: x.com from "A" to "B"\n',
+    });
+    expect(prompt).toContain('User corrections');
+    expect(prompt).toContain('corrected: x.com');
+  });
+
+  it('includes rejection hints', () => {
+    const prompt = buildPrompt(tabs, 5, {}, 80, '', {
+      rejections: '\nAVOID: news.com should NOT be in "Dev"\n',
+    });
+    expect(prompt).toContain('AVOID');
+  });
+
+  it('includes weighted affinity hint', () => {
+    const prompt = buildPrompt(tabs, 5, {}, 80, '', {
+      affinityHint: '\nUser preferences:\n  github.com → "Dev" (12x, recent)\n',
+    });
+    expect(prompt).toContain('12x');
+    expect(prompt).toContain('recent');
+  });
+
+  it('includes co-occurrence hints', () => {
+    const prompt = buildPrompt(tabs, 5, {}, 80, '', {
+      coOccurrence: '\nCo-occurrence:\n  [github.com, stackoverflow.com]\n',
+    });
+    expect(prompt).toContain('Co-occurrence');
   });
 });

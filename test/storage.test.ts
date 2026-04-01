@@ -10,9 +10,16 @@ import {
   getCosts, addCost,
   getHistory, addHistory, summarizeHistory,
   exportAll, importAll,
-  getWorkspaces, saveWorkspace, removeWorkspace
+  getWorkspaces, saveWorkspace, removeWorkspace,
+  getWeightedAffinity, updateWeightedAffinity, extractPathKey,
+  computeDecayedWeight, formatWeightedAffinityHints,
+  getCorrections, addCorrections, summarizeCorrections,
+  getRejections, addRejection, addRejections, isRejected, summarizeRejections,
+  getCoOccurrence, updateCoOccurrence, summarizeCoOccurrence,
+  pickBestWeightedGroup,
 } from '../src/storage';
 import { DEFAULT_SETTINGS, DEFAULT_STATS, DEFAULT_COSTS } from '../src/types';
+import type { WeightedAffinityEntry, RejectionEntry, HistoryEntry } from '../src/types';
 import type { GroupSuggestion, DomainRule, UndoSnapshot, ExportData } from '../src/types';
 
 beforeEach(() => resetStores());
@@ -70,8 +77,10 @@ describe('affinity', () => {
     expect((await getAffinity())['github.com']).toBe('Dev');
   });
 
-  it('overwrites existing affinity', async () => {
+  it('newer group wins when called more times', async () => {
     await updateAffinity([{ name: 'Old', color: 'blue', tabs: [{ id: 1, title: '', url: 'https://github.com/x' }] }]);
+    // Call "New" twice so it has higher count
+    await updateAffinity([{ name: 'New', color: 'red', tabs: [{ id: 1, title: '', url: 'https://github.com/y' }] }]);
     await updateAffinity([{ name: 'New', color: 'red', tabs: [{ id: 1, title: '', url: 'https://github.com/y' }] }]);
     expect((await getAffinity())['github.com']).toBe('New');
   });
@@ -206,6 +215,29 @@ describe('costs', () => {
     const c = await getCosts();
     expect(c.byProvider['anthropic'].inputTokens).toBe(3000);
     expect(c.byProvider['anthropic'].cost).toBeCloseTo(0.03);
+  });
+
+  it('records $0 cost for free-tier models', async () => {
+    const c = await addCost('gemini', 5000, 2000, 0);
+    expect(c.totalCost).toBe(0);
+    expect(c.totalInputTokens).toBe(5000);
+    expect(c.byProvider['gemini'].cost).toBe(0);
+    expect(c.byProvider['gemini'].inputTokens).toBe(5000);
+  });
+
+  it('handles zero token counts', async () => {
+    const c = await addCost('anthropic', 0, 0, 0);
+    expect(c.totalInputTokens).toBe(0);
+    expect(c.totalOutputTokens).toBe(0);
+    expect(c.totalCost).toBe(0);
+    expect(c.byProvider['anthropic']).toBeDefined();
+  });
+
+  it('handles unknown provider id as a new key', async () => {
+    const c = await addCost('unknown-provider-xyz', 100, 50, 0);
+    expect(c.byProvider['unknown-provider-xyz']).toBeDefined();
+    expect(c.byProvider['unknown-provider-xyz'].inputTokens).toBe(100);
+    expect(c.byProvider['unknown-provider-xyz'].cost).toBe(0);
   });
 });
 
@@ -351,5 +383,292 @@ describe('workspaces', () => {
     vi.mocked(chrome.storage.local.get).mockResolvedValue({ workspaces: { Dev: wsData } });
     await removeWorkspace('Dev');
     expect(chrome.storage.local.set).toHaveBeenCalledWith({ workspaces: {} });
+  });
+});
+
+// ---------- Weighted Affinity ----------
+
+describe('weighted affinity', () => {
+  beforeEach(() => resetStores());
+
+  it('returns empty map when nothing stored', async () => {
+    expect(await getWeightedAffinity()).toEqual({});
+  });
+
+  it('builds weighted entries from suggestions', async () => {
+    await updateWeightedAffinity([
+      { name: 'Dev', color: 'blue', tabs: [{ id: 1, title: 'GH', url: 'https://github.com/repo' }] },
+    ]);
+    const w = await getWeightedAffinity();
+    expect(w['github.com']?.groups?.['Dev']?.count).toBe(1);
+    expect(w['github.com']?.groups?.['Dev']?.lastUsed).toBeGreaterThan(0);
+  });
+
+  it('increments count on repeated updates', async () => {
+    const tabs = [{ id: 1, title: '', url: 'https://github.com/x' }];
+    await updateWeightedAffinity([{ name: 'Dev', color: 'blue', tabs }]);
+    await updateWeightedAffinity([{ name: 'Dev', color: 'blue', tabs }]);
+    const w = await getWeightedAffinity();
+    expect(w['github.com'].groups['Dev'].count).toBe(2);
+  });
+
+  it('applies correction weight', async () => {
+    const tabs = [{ id: 1, title: '', url: 'https://github.com/x' }];
+    await updateWeightedAffinity([{ name: 'Dev', color: 'blue', tabs }], 3);
+    const w = await getWeightedAffinity();
+    expect(w['github.com'].groups['Dev'].count).toBe(3);
+  });
+
+  it('tracks path-level keys for multi-tenant hosts', async () => {
+    await updateWeightedAffinity([
+      { name: 'MyOrg', color: 'blue', tabs: [{ id: 1, title: '', url: 'https://github.com/myorg/repo' }] },
+    ]);
+    const w = await getWeightedAffinity();
+    expect(w['github.com/myorg']?.groups?.['MyOrg']?.count).toBe(1);
+  });
+
+  it('migrates flat affinity to weighted on first read', async () => {
+    await chrome.storage.local.set({ affinity: { 'example.com': 'Work' } });
+    const w = await getWeightedAffinity();
+    expect(w['example.com']?.groups?.['Work']?.count).toBe(1);
+  });
+
+  it('migration is idempotent', async () => {
+    await chrome.storage.local.set({ affinity: { 'example.com': 'Work' } });
+    await getWeightedAffinity();
+    await getWeightedAffinity();
+    const w = await getWeightedAffinity();
+    expect(w['example.com']?.groups?.['Work']?.count).toBe(1);
+  });
+});
+
+describe('extractPathKey', () => {
+  it('extracts path for github.com', () => {
+    expect(extractPathKey('https://github.com/myorg/repo')).toBe('github.com/myorg');
+  });
+
+  it('extracts path for reddit.com', () => {
+    expect(extractPathKey('https://reddit.com/r/javascript')).toBe('reddit.com/r');
+  });
+
+  it('returns null for non-multi-tenant hosts', () => {
+    expect(extractPathKey('https://example.com/page')).toBeNull();
+  });
+
+  it('returns null for root path', () => {
+    expect(extractPathKey('https://github.com')).toBeNull();
+  });
+
+  it('handles invalid URLs', () => {
+    expect(extractPathKey('not-a-url')).toBeNull();
+  });
+});
+
+describe('computeDecayedWeight', () => {
+  it('returns full weight for recent entries', () => {
+    const now = Date.now();
+    expect(computeDecayedWeight(10, now, now)).toBeCloseTo(10, 1);
+  });
+
+  it('decays weight over time', () => {
+    const now = Date.now();
+    const twoWeeksAgo = now - 14 * 24 * 60 * 60 * 1000;
+    const w = computeDecayedWeight(10, twoWeeksAgo, now);
+    expect(w).toBeLessThan(5);
+    expect(w).toBeGreaterThan(3);
+  });
+});
+
+describe('pickBestWeightedGroup', () => {
+  it('picks highest weight group', () => {
+    const now = Date.now();
+    const entry: WeightedAffinityEntry = {
+      groups: {
+        'Dev': { count: 10, lastUsed: now },
+        'Research': { count: 2, lastUsed: now },
+      },
+    };
+    expect(pickBestWeightedGroup(entry, [], 'example.com', now)).toBe('Dev');
+  });
+
+  it('skips rejected groups', () => {
+    const now = Date.now();
+    const entry: WeightedAffinityEntry = {
+      groups: {
+        'Dev': { count: 10, lastUsed: now },
+        'Research': { count: 5, lastUsed: now },
+      },
+    };
+    const rejections: RejectionEntry[] = [
+      { timestamp: now, domain: 'example.com', rejectedGroup: 'Dev' },
+    ];
+    expect(pickBestWeightedGroup(entry, rejections, 'example.com', now)).toBe('Research');
+  });
+
+  it('returns null when all groups rejected', () => {
+    const now = Date.now();
+    const entry: WeightedAffinityEntry = {
+      groups: { 'Dev': { count: 1, lastUsed: now } },
+    };
+    const rejections: RejectionEntry[] = [
+      { timestamp: now, domain: 'x.com', rejectedGroup: 'Dev' },
+    ];
+    expect(pickBestWeightedGroup(entry, rejections, 'x.com', now)).toBeNull();
+  });
+});
+
+describe('formatWeightedAffinityHints', () => {
+  it('returns empty for empty map', () => {
+    expect(formatWeightedAffinityHints({})).toBe('');
+  });
+
+  it('formats weighted hints with counts', () => {
+    const now = Date.now();
+    const weighted = {
+      'github.com': { groups: { 'Dev': { count: 12, lastUsed: now } } },
+    };
+    const result = formatWeightedAffinityHints(weighted, now);
+    expect(result).toContain('github.com');
+    expect(result).toContain('Dev');
+    expect(result).toContain('12x');
+  });
+
+  it('skips path-level entries', () => {
+    const now = Date.now();
+    const weighted = {
+      'github.com/myorg': { groups: { 'Dev': { count: 5, lastUsed: now } } },
+    };
+    expect(formatWeightedAffinityHints(weighted, now)).toBe('');
+  });
+});
+
+// ---------- Corrections ----------
+
+describe('corrections', () => {
+  beforeEach(() => resetStores());
+
+  it('returns empty array initially', async () => {
+    expect(await getCorrections()).toEqual([]);
+  });
+
+  it('adds and retrieves corrections', async () => {
+    const entry = {
+      timestamp: Date.now(),
+      corrections: [{ domain: 'x.com', originalGroup: 'A', correctedGroup: 'B' }],
+    };
+    await addCorrections(entry);
+    const result = await getCorrections();
+    expect(result).toHaveLength(1);
+    expect(result[0].corrections[0].correctedGroup).toBe('B');
+  });
+
+  it('summarizes corrections', async () => {
+    const entry = {
+      timestamp: Date.now(),
+      corrections: [
+        { domain: 'amazon.com', originalGroup: 'News', correctedGroup: 'Shopping' },
+        { domain: 'amazon.com', originalGroup: 'News', correctedGroup: 'Shopping' },
+      ],
+    };
+    await addCorrections(entry);
+    const summary = await summarizeCorrections();
+    expect(summary).toContain('amazon.com');
+    expect(summary).toContain('Shopping');
+  });
+
+  it('returns empty summary when no corrections', async () => {
+    expect(await summarizeCorrections()).toBe('');
+  });
+});
+
+// ---------- Rejections ----------
+
+describe('rejections', () => {
+  beforeEach(() => resetStores());
+
+  it('returns empty array initially', async () => {
+    expect(await getRejections()).toEqual([]);
+  });
+
+  it('adds single rejection', async () => {
+    await addRejection('news.com', 'Dev');
+    const result = await getRejections();
+    expect(result).toHaveLength(1);
+    expect(result[0].domain).toBe('news.com');
+  });
+
+  it('adds batch rejections', async () => {
+    const now = Date.now();
+    await addRejections([
+      { timestamp: now, domain: 'a.com', rejectedGroup: 'X' },
+      { timestamp: now, domain: 'b.com', rejectedGroup: 'Y' },
+    ]);
+    expect(await getRejections()).toHaveLength(2);
+  });
+
+  it('isRejected returns true for rejected combo', () => {
+    const now = Date.now();
+    const rejections: RejectionEntry[] = [
+      { timestamp: now, domain: 'news.com', rejectedGroup: 'Dev' },
+    ];
+    expect(isRejected('news.com', 'Dev', rejections, now)).toBe(true);
+    expect(isRejected('news.com', 'News', rejections, now)).toBe(false);
+  });
+
+  it('isRejected ignores old rejections', () => {
+    const now = Date.now();
+    const oldTimestamp = now - 31 * 24 * 60 * 60 * 1000; // 31 days ago
+    const rejections: RejectionEntry[] = [
+      { timestamp: oldTimestamp, domain: 'news.com', rejectedGroup: 'Dev' },
+    ];
+    expect(isRejected('news.com', 'Dev', rejections, now)).toBe(false);
+  });
+
+  it('summarizes rejections', async () => {
+    await addRejection('news.com', 'Dev');
+    const summary = await summarizeRejections();
+    expect(summary).toContain('AVOID');
+    expect(summary).toContain('news.com');
+    expect(summary).toContain('Dev');
+  });
+});
+
+// ---------- Co-occurrence ----------
+
+describe('co-occurrence', () => {
+  beforeEach(() => resetStores());
+
+  it('returns empty map initially', async () => {
+    expect(await getCoOccurrence()).toEqual({});
+  });
+
+  it('builds co-occurrence from history', async () => {
+    const history: HistoryEntry[] = [
+      { timestamp: 1, groups: [{ name: 'Dev', domains: ['github.com', 'stackoverflow.com'] }] },
+      { timestamp: 2, groups: [{ name: 'Dev', domains: ['github.com', 'stackoverflow.com'] }] },
+      { timestamp: 3, groups: [{ name: 'Dev', domains: ['github.com', 'stackoverflow.com'] }] },
+    ];
+    await updateCoOccurrence(history);
+    const matrix = await getCoOccurrence();
+    expect(matrix['github.com|stackoverflow.com']).toBe(3);
+  });
+
+  it('summarizes co-occurrence clusters', async () => {
+    const history: HistoryEntry[] = Array.from({ length: 5 }, (_, i) => ({
+      timestamp: i,
+      groups: [{ name: 'Dev', domains: ['github.com', 'stackoverflow.com', 'npmjs.com'] }],
+    }));
+    await updateCoOccurrence(history);
+    const summary = await summarizeCoOccurrence();
+    expect(summary).toContain('Frequently grouped together');
+    expect(summary).toContain('github.com');
+  });
+
+  it('returns empty summary for sparse data', async () => {
+    const history: HistoryEntry[] = [
+      { timestamp: 1, groups: [{ name: 'A', domains: ['a.com', 'b.com'] }] },
+    ];
+    await updateCoOccurrence(history);
+    expect(await summarizeCoOccurrence()).toBe('');
   });
 });

@@ -1,6 +1,6 @@
-import type { Color, GroupSuggestion, TabInfo } from './types';
+import type { Color, GroupSuggestion, TabInfo, CorrectionEntry, RejectionEntry, MergeSplitResult } from './types';
 import { COLORS } from './types';
-import { getSuggestions } from './storage';
+import { getSuggestions, getSettings } from './storage';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -23,6 +23,7 @@ const statsText = $<HTMLSpanElement>('stats-text');
 const costText = $<HTMLSpanElement>('cost-text');
 
 let currentSuggestions: GroupSuggestion[] = [];
+let originalSuggestions: GroupSuggestion[] = [];
 let currentDupeGroups: TabInfo[][] = [];
 
 function clearSuggestionUi() {
@@ -61,8 +62,40 @@ async function runPowerAction(
   return res;
 }
 
+function deepCloneSuggestions(suggestions: GroupSuggestion[]): GroupSuggestion[] {
+  return suggestions.map(g => ({
+    name: g.name,
+    color: g.color,
+    tabs: g.tabs.map(t => ({ ...t })),
+  }));
+}
+
+function computeCorrections(original: GroupSuggestion[], current: GroupSuggestion[]): CorrectionEntry['corrections'] {
+  // Build tab→group map for original
+  const originalMap = new Map<number, string>();
+  for (const g of original) {
+    for (const t of g.tabs) originalMap.set(t.id, g.name);
+  }
+
+  const corrections: CorrectionEntry['corrections'] = [];
+  for (const g of current) {
+    for (const t of g.tabs) {
+      const origGroup = originalMap.get(t.id);
+      if (origGroup && origGroup !== g.name) {
+        try {
+          const domain = new URL(t.url).hostname;
+          corrections.push({ domain, originalGroup: origGroup, correctedGroup: g.name });
+        } catch { /* skip */ }
+      }
+    }
+  }
+
+  return corrections;
+}
+
 function renderSuggestions(suggestions: GroupSuggestion[]) {
   currentSuggestions = suggestions;
+  originalSuggestions = deepCloneSuggestions(suggestions);
   container.innerHTML = '';
   searchInput.style.display = suggestions.length ? 'block' : 'none';
 
@@ -81,6 +114,7 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
         <select class="group-color" data-i="${i}">
           ${COLORS.map(c => `<option value="${c}" ${c === g.color ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
+        <button class="pin-group" data-i="${i}" title="Pin this group (survives re-org)">&#x1F4CC;</button>
         <button class="remove-group" data-i="${i}">&times;</button>
       </div>
       <ul class="tab-list">
@@ -101,9 +135,45 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
     }),
   );
 
+  container.querySelectorAll<HTMLButtonElement>('.pin-group').forEach(el =>
+    el.addEventListener('click', async () => {
+      const idx = Number(el.dataset.i);
+      const groupName = currentSuggestions[idx]?.name;
+      if (!groupName) return;
+      const settings = await getSettings();
+      const pinned = new Set(settings.pinnedGroups);
+      if (pinned.has(groupName)) {
+        pinned.delete(groupName);
+        setStatus(`Unpinned "${groupName}"`);
+      } else {
+        pinned.add(groupName);
+        setStatus(`Pinned "${groupName}" — survives re-org`);
+      }
+      await sendMsg({ type: 'import-data', data: { settings: { ...settings, pinnedGroups: [...pinned] } } });
+    }),
+  );
+
   container.querySelectorAll<HTMLButtonElement>('.remove-group').forEach(el =>
-    el.addEventListener('click', () => {
-      currentSuggestions.splice(Number(el.dataset.i), 1);
+    el.addEventListener('click', async () => {
+      const idx = Number(el.dataset.i);
+      const removed = currentSuggestions[idx];
+
+      // Track rejections
+      if (removed) {
+        const rejections: RejectionEntry[] = [];
+        const now = Date.now();
+        for (const tab of removed.tabs) {
+          try {
+            const domain = new URL(tab.url).hostname;
+            rejections.push({ timestamp: now, domain, rejectedGroup: removed.name });
+          } catch { /* skip */ }
+        }
+        if (rejections.length > 0) {
+          sendMsg({ type: 'record-rejections', rejections });
+        }
+      }
+
+      currentSuggestions.splice(idx, 1);
       renderSuggestions(currentSuggestions);
     }),
   );
@@ -198,6 +268,13 @@ btnApply.addEventListener('click', async () => {
   if (!currentSuggestions.length) return;
   setStatus('Applying...');
   btnApply.disabled = true;
+
+  // Track corrections (user edits before applying)
+  const corrections = computeCorrections(originalSuggestions, currentSuggestions);
+  if (corrections.length > 0) {
+    sendMsg({ type: 'record-corrections', corrections: { timestamp: Date.now(), corrections } });
+  }
+
   await sendMsg({ type: 'apply', suggestions: currentSuggestions });
   setStatus('Applied!');
   btnApply.disabled = false;
@@ -247,6 +324,34 @@ async function refreshFooter() {
   }
 }
 
+function renderMergeSplit(result: MergeSplitResult) {
+  const wrapper = document.getElementById('merge-split-wrapper');
+  const container = document.getElementById('merge-split');
+  if (!wrapper || !container) return;
+
+  if (!result.merges.length && !result.splits.length) {
+    wrapper.hidden = true;
+    return;
+  }
+
+  wrapper.hidden = false;
+  container.innerHTML = '';
+
+  for (const m of result.merges) {
+    const div = document.createElement('div');
+    div.className = 'merge-split-card';
+    div.innerHTML = `<span class="ms-icon">&#x1F500;</span> Merge <strong>${esc(m.group1)}</strong> + <strong>${esc(m.group2)}</strong>? (${m.overlap}% overlap)`;
+    container.appendChild(div);
+  }
+
+  for (const s of result.splits) {
+    const div = document.createElement('div');
+    div.className = 'merge-split-card';
+    div.innerHTML = `<span class="ms-icon">&#x2702;</span> Split <strong>${esc(s.group)}</strong>? (${s.tabCount} tabs, ${s.domainCount} domains)`;
+    container.appendChild(div);
+  }
+}
+
 (async () => {
   const pending = await getSuggestions();
   if (pending?.length) {
@@ -254,4 +359,27 @@ async function refreshFooter() {
     renderSuggestions(pending);
   }
   await refreshFooter();
+
+  // Check group drift
+  const settings = await getSettings();
+  if (settings.enableGroupDrift) {
+    const driftRes = await sendMsg({ type: 'check-group-drift' });
+    const driftWarning = document.getElementById('drift-warning');
+    if (driftRes?.drifted && driftWarning) {
+      driftWarning.hidden = false;
+      driftWarning.querySelector('.drift-text')!.textContent =
+        `Groups may need refreshing: ${driftRes.driftedGroups.join(', ')}`;
+    }
+  }
+
+  // Check merge/split suggestions
+  const msRes = await sendMsg({ type: 'merge-split-suggestions' });
+  if (msRes?.mergeSplit) renderMergeSplit(msRes.mergeSplit);
 })();
+
+// Drift warning refresh button
+document.getElementById('drift-refresh')?.addEventListener('click', () => {
+  doOrganize(false);
+  const dw = document.getElementById('drift-warning');
+  if (dw) dw.hidden = true;
+});

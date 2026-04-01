@@ -98,10 +98,58 @@ export interface Settings extends LLMConfig {
   silentAutoAdd: boolean;
   autoPinApps: boolean;
   staleTabThresholdHours: number;
+  // Smart learning
+  enableCorrectionTracking: boolean;
+  enableRejectionMemory: boolean;
+  enableGroupDrift: boolean;
+  enablePatternMining: boolean;
+  groupDriftThreshold: number;
+  // Scheduled re-org
+  reorgSchedule: 'off' | 'daily' | 'weekly';
+  reorgTime: number;
+  // Pinned groups
+  pinnedGroups: string[];
 }
 
 export interface AffinityMap {
   [domain: string]: string;
+}
+
+// --- Weighted Affinity (learning system) ---
+
+export interface WeightedAffinityGroup {
+  count: number;
+  lastUsed: number;
+}
+
+export interface WeightedAffinityEntry {
+  groups: Record<string, WeightedAffinityGroup>;
+}
+
+export interface WeightedAffinityMap {
+  [key: string]: WeightedAffinityEntry;
+}
+
+// --- Correction Tracking ---
+
+export interface CorrectionEntry {
+  timestamp: number;
+  corrections: { domain: string; originalGroup: string; correctedGroup: string }[];
+}
+
+// --- Rejection Memory ---
+
+export interface RejectionEntry {
+  timestamp: number;
+  domain: string;
+  rejectedGroup: string;
+}
+
+// --- Merge/Split Suggestions ---
+
+export interface MergeSplitResult {
+  merges: { group1: string; group2: string; overlap: number }[];
+  splits: { group: string; tabCount: number; domainCount: number }[];
 }
 
 export interface DomainRule {
@@ -189,6 +237,9 @@ export interface ExportData {
   affinity: AffinityMap;
   domainRules: DomainRule[];
   workspaces: WorkspaceMap;
+  weightedAffinity?: WeightedAffinityMap;
+  corrections?: CorrectionEntry[];
+  rejections?: RejectionEntry[];
 }
 
 // --- Defaults ---
@@ -206,6 +257,14 @@ export const DEFAULT_SETTINGS: Settings = {
   silentAutoAdd: false,
   autoPinApps: false,
   staleTabThresholdHours: 48,
+  enableCorrectionTracking: true,
+  enableRejectionMemory: true,
+  enableGroupDrift: false,
+  enablePatternMining: false,
+  groupDriftThreshold: 50,
+  reorgSchedule: 'off',
+  reorgTime: 9,
+  pinnedGroups: [],
 };
 
 export const DEFAULT_STATS: Stats = {
@@ -249,7 +308,11 @@ export type MessageType =
   | { type: 'save-workspace'; name: string }
   | { type: 'restore-workspace'; name: string }
   | { type: 'rag-chat'; query: string }
-  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number };
+  | { type: 'record-corrections'; corrections: CorrectionEntry }
+  | { type: 'record-rejections'; rejections: RejectionEntry[] }
+  | { type: 'check-group-drift' }
+  | { type: 'merge-split-suggestions' }
+  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult };
 
 declare global {
   var LanguageModel: {

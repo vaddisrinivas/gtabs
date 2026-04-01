@@ -23,6 +23,18 @@ const inSilentAutoAdd = $<HTMLInputElement>('silentAutoAdd');
 const inAutoPinApps = $<HTMLInputElement>('autoPinApps');
 const inStaleTabThresholdHours = $<HTMLInputElement>('staleTabThresholdHours');
 const outStale = $<HTMLSpanElement>('staleVal');
+const inEnableCorrectionTracking = $<HTMLInputElement>('enableCorrectionTracking');
+const inEnableRejectionMemory = $<HTMLInputElement>('enableRejectionMemory');
+const inEnableGroupDrift = $<HTMLInputElement>('enableGroupDrift');
+const inEnablePatternMining = $<HTMLInputElement>('enablePatternMining');
+const inGroupDriftThreshold = $<HTMLInputElement>('groupDriftThreshold');
+const outDriftThreshold = $<HTMLSpanElement>('driftThresholdVal');
+const inReorgSchedule = $<HTMLSelectElement>('reorgSchedule');
+const inReorgTime = $<HTMLInputElement>('reorgTime');
+const outReorgTime = $<HTMLSpanElement>('reorgTimeVal');
+const pinnedContainer = $<HTMLDivElement>('pinned-groups');
+const inNewPinnedGroup = $<HTMLInputElement>('new-pinned-group');
+const btnAddPinned = $<HTMLButtonElement>('add-pinned');
 const rulesContainer = $<HTMLDivElement>('domain-rules');
 const btnAddRule = $<HTMLButtonElement>('add-rule');
 const btnExport = $<HTMLButtonElement>('export-data');
@@ -143,6 +155,9 @@ async function save() {
   const model = modelSelect.value;
   const baseUrl = p.baseUrl;
 
+  // Preserve pinnedGroups from current settings (managed separately)
+  const current = await getSettings();
+
   const settings: Settings = {
     provider: p.id,
     baseUrl,
@@ -156,6 +171,14 @@ async function save() {
     silentAutoAdd: inSilentAutoAdd.checked,
     autoPinApps: inAutoPinApps.checked,
     staleTabThresholdHours: Number(inStaleTabThresholdHours.value) || DEFAULT_SETTINGS.staleTabThresholdHours,
+    enableCorrectionTracking: inEnableCorrectionTracking.checked,
+    enableRejectionMemory: inEnableRejectionMemory.checked,
+    enableGroupDrift: inEnableGroupDrift.checked,
+    enablePatternMining: inEnablePatternMining.checked,
+    groupDriftThreshold: Number(inGroupDriftThreshold.value) || DEFAULT_SETTINGS.groupDriftThreshold,
+    reorgSchedule: inReorgSchedule.value as Settings['reorgSchedule'],
+    reorgTime: Number(inReorgTime.value),
+    pinnedGroups: current.pinnedGroups || [],
   };
   await saveSettings(settings);
 }
@@ -205,6 +228,22 @@ async function load() {
   
   inStaleTabThresholdHours.value = String(s.staleTabThresholdHours);
   outStale.textContent = String(s.staleTabThresholdHours);
+
+  // Smart learning
+  inEnableCorrectionTracking.checked = s.enableCorrectionTracking;
+  inEnableRejectionMemory.checked = s.enableRejectionMemory;
+  inEnableGroupDrift.checked = s.enableGroupDrift;
+  inEnablePatternMining.checked = s.enablePatternMining;
+  inGroupDriftThreshold.value = String(s.groupDriftThreshold);
+  outDriftThreshold.textContent = String(s.groupDriftThreshold);
+
+  // Scheduled re-org
+  inReorgSchedule.value = s.reorgSchedule;
+  inReorgTime.value = String(s.reorgTime);
+  outReorgTime.textContent = String(s.reorgTime);
+
+  // Pinned groups
+  renderPinnedGroups(s.pinnedGroups || []);
 
   // Domain rules
   await renderDomainRules();
@@ -337,18 +376,61 @@ importFile.addEventListener('change', async () => {
   importFile.value = '';
 });
 
+// --- Pinned Groups ---
+
+function renderPinnedGroups(pinnedGroups: string[]) {
+  pinnedContainer.innerHTML = '';
+  for (let i = 0; i < pinnedGroups.length; i++) {
+    const row = document.createElement('div');
+    row.className = 'rule-row';
+    row.innerHTML = `
+      <input type="text" value="${esc(pinnedGroups[i])}" readonly style="flex:1;opacity:0.8" />
+      <button class="btn-ghost btn-sm pinned-delete" data-i="${i}">&times;</button>`;
+    pinnedContainer.appendChild(row);
+  }
+
+  pinnedContainer.querySelectorAll('.pinned-delete').forEach(el =>
+    el.addEventListener('click', async () => {
+      const s = await getSettings();
+      const groups = [...(s.pinnedGroups || [])];
+      groups.splice(Number((el as HTMLElement).dataset.i), 1);
+      await saveSettings({ ...s, pinnedGroups: groups });
+      renderPinnedGroups(groups);
+    }),
+  );
+}
+
+btnAddPinned.addEventListener('click', async () => {
+  const name = inNewPinnedGroup.value.trim();
+  if (!name) return;
+  const s = await getSettings();
+  const groups = [...(s.pinnedGroups || [])];
+  if (!groups.includes(name)) groups.push(name);
+  await saveSettings({ ...s, pinnedGroups: groups });
+  renderPinnedGroups(groups);
+  inNewPinnedGroup.value = '';
+});
+
 // --- Auto-save on changes ---
 const rangeBindings = [
   { input: inMaxGroups, out: outMaxGroups },
   { input: inMaxTitleLength, out: outMaxTitleLength },
   { input: inThreshold, out: outThreshold },
-  { input: inStaleTabThresholdHours, out: outStale }
+  { input: inStaleTabThresholdHours, out: outStale },
+  { input: inGroupDriftThreshold, out: outDriftThreshold },
+  { input: inReorgTime, out: outReorgTime },
 ];
 for (const b of rangeBindings) {
   b.input.addEventListener('input', () => { b.out.textContent = b.input.value; });
 }
 
-const autoSaveElements = [inApiKey, modelSelect, inMaxGroups, inMaxTitleLength, inAutoTrigger, inThreshold, inMergeMode, inSilentAutoAdd, inAutoPinApps, inStaleTabThresholdHours];
+const autoSaveElements = [
+  inApiKey, modelSelect, inMaxGroups, inMaxTitleLength, inAutoTrigger, inThreshold,
+  inMergeMode, inSilentAutoAdd, inAutoPinApps, inStaleTabThresholdHours,
+  inEnableCorrectionTracking, inEnableRejectionMemory, inEnableGroupDrift,
+  inEnablePatternMining, inGroupDriftThreshold,
+  inReorgSchedule, inReorgTime,
+];
 for (const el of autoSaveElements) {
   el.addEventListener('change', save);
   if (el instanceof HTMLInputElement && (el.type === 'text' || el.type === 'password' || el.type === 'number' || el.type === 'range')) {

@@ -8,14 +8,91 @@ import type { TabInfo, GroupSuggestion } from '../src/types';
 // Background registers listeners — we'll import the module functions directly
 import {
   autoPinImportantApps,
+  calculateCost,
   consolidateWindows,
   deleteAllTabGroups,
   focusCurrentGroup,
   getTabs, organize, applyGroups, findDuplicateTabs,
+  hostnameFromUrl,
+  isGroupedTab,
+  isImportantAppUrl,
+  isTabUrlAllowed,
   purgeStaleTabs,
   sortCurrentGroupsByDomain,
   snapshotCurrentState, restoreSnapshot, undoLastGrouping
 } from '../src/background';
+
+// ---------- Pure utility unit tests ----------
+
+describe('isTabUrlAllowed', () => {
+  it('allows https URLs', () => expect(isTabUrlAllowed('https://example.com')).toBe(true));
+  it('allows http URLs', () => expect(isTabUrlAllowed('http://example.com')).toBe(true));
+  it('blocks chrome:// URLs', () => expect(isTabUrlAllowed('chrome://extensions')).toBe(false));
+  it('blocks chrome-extension:// URLs', () => expect(isTabUrlAllowed('chrome-extension://abc/popup.html')).toBe(false));
+  it('allows about:blank (regex requires ://, not matched by about:blank)', () => expect(isTabUrlAllowed('about:blank')).toBe(true));
+  it('blocks edge:// URLs', () => expect(isTabUrlAllowed('edge://newtab')).toBe(false));
+  it('blocks null', () => expect(isTabUrlAllowed(null)).toBe(false));
+  it('blocks undefined', () => expect(isTabUrlAllowed(undefined)).toBe(false));
+  it('blocks empty string', () => expect(isTabUrlAllowed('')).toBe(false));
+});
+
+describe('hostnameFromUrl', () => {
+  it('extracts hostname from a simple URL', () => expect(hostnameFromUrl('https://github.com/repo')).toBe('github.com'));
+  it('strips www prefix', () => expect(hostnameFromUrl('https://www.example.com/path')).toBe('example.com'));
+  it('handles subdomains without stripping non-www', () => expect(hostnameFromUrl('https://mail.google.com/inbox')).toBe('mail.google.com'));
+  it('returns empty string for invalid URL', () => expect(hostnameFromUrl('not-a-url')).toBe(''));
+  it('returns empty string for empty string', () => expect(hostnameFromUrl('')).toBe(''));
+  it('ignores port in returned hostname', () => expect(hostnameFromUrl('http://localhost:3000/app')).toBe('localhost'));
+});
+
+describe('isImportantAppUrl', () => {
+  it('identifies Gmail', () => expect(isImportantAppUrl('https://mail.google.com/mail/u/0/#inbox')).toBe(true));
+  it('identifies Slack', () => expect(isImportantAppUrl('https://myteam.slack.com/messages')).toBe(true));
+  it('identifies Notion', () => expect(isImportantAppUrl('https://notion.so/my-workspace')).toBe(true));
+  it('identifies Jira via atlassian.net subdomain', () => expect(isImportantAppUrl('https://company.atlassian.net/jira')).toBe(true));
+  it('does not identify random news sites', () => expect(isImportantAppUrl('https://news.ycombinator.com')).toBe(false));
+  it('does not identify random URLs', () => expect(isImportantAppUrl('https://example.com')).toBe(false));
+});
+
+describe('isGroupedTab', () => {
+  it('returns true when groupId is a positive number', () => expect(isGroupedTab({ groupId: 100 })).toBe(true));
+  it('returns true when groupId is 0', () => expect(isGroupedTab({ groupId: 0 })).toBe(true));
+  it('returns false when groupId is -1', () => expect(isGroupedTab({ groupId: -1 })).toBe(false));
+  it('returns false when groupId is undefined', () => expect(isGroupedTab({ groupId: undefined })).toBe(false));
+  it('returns false when groupId is missing', () => expect(isGroupedTab({})).toBe(false));
+});
+
+describe('calculateCost', () => {
+  it('computes correct cost for a known model', () => {
+    // claude-sonnet-4-6: $3/M input, $15/M output
+    const cost = calculateCost('claude-sonnet-4-6', 1_000_000, 1_000_000);
+    expect(cost).toBeCloseTo(18, 5);
+  });
+
+  it('returns 0 for an unknown model', () => {
+    expect(calculateCost('unknown-model-xyz', 100, 100)).toBe(0);
+  });
+
+  it('returns 0 when both token counts are 0', () => {
+    expect(calculateCost('claude-haiku-4-5', 0, 0)).toBe(0);
+  });
+
+  it('computes cost with only input tokens', () => {
+    // gpt-4.1: $2/M input, $8/M output
+    const cost = calculateCost('gpt-4.1', 500_000, 0);
+    expect(cost).toBeCloseTo(1.0, 5);
+  });
+
+  it('computes cost with only output tokens', () => {
+    // gpt-4.1: $2/M input, $8/M output
+    const cost = calculateCost('gpt-4.1', 0, 500_000);
+    expect(cost).toBeCloseTo(4.0, 5);
+  });
+
+  it('returns 0 for free models (gemini-nano)', () => {
+    expect(calculateCost('gemini-nano', 1_000_000, 1_000_000)).toBe(0);
+  });
+});
 
 const chromeTabs = [
   { id: 1, title: 'GitHub', url: 'https://github.com/repo', groupId: -1 },
@@ -174,10 +251,10 @@ describe('applyGroups', () => {
 
   it('updates affinity from applied groups', async () => {
     await applyGroups(suggestions);
-    // Affinity is updated — verify storage was written
-    const affinityData = await chrome.storage.local.get({ affinity: {} });
-    const affinity = affinityData.affinity as Record<string, string>;
-    expect(affinity['github.com']).toBe('Dev');
+    // Affinity is updated — verify weighted affinity storage was written
+    const affinityData = await chrome.storage.local.get({ weightedAffinity: {} });
+    const weighted = affinityData.weightedAffinity as Record<string, any>;
+    expect(weighted['github.com']?.groups?.['Dev']?.count).toBeGreaterThan(0);
   });
 });
 
@@ -197,6 +274,21 @@ describe('findDuplicateTabs', () => {
 
   it('returns empty when no duplicates', async () => {
     const dupes = await findDuplicateTabs();
+    expect(dupes).toHaveLength(0);
+  });
+
+  // e2e stub: dedup across multiple windows
+  // getTabs() queries { currentWindow: true }, so cross-window dedup is not
+  // handled by findDuplicateTabs(). This test documents the current behavior
+  // and serves as a regression anchor when multi-window dedup is implemented.
+  it('stub: same URL in two windows appears as one tab (current-window only)', async () => {
+    // Simulate current window having one copy of the URL; the second copy
+    // lives in another window and is not returned by chrome.tabs.query.
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      { id: 10, title: 'GitHub', url: 'https://github.com/repo' },
+    ] as any);
+    const dupes = await findDuplicateTabs();
+    // No duplicates detected because the other window's tab is not queried.
     expect(dupes).toHaveLength(0);
   });
 });
@@ -525,7 +617,11 @@ describe('event listeners', () => {
 
     it('handles commands', async () => {
       await (chrome.commands.onCommand as any).callListeners('organize-tabs');
+      await vi.runAllTimersAsync();
+      for (let i = 0; i < 15; i++) await new Promise(r => process.nextTick(r));
       await (chrome.commands.onCommand as any).callListeners('undo-grouping');
+      await vi.runAllTimersAsync();
+      for (let i = 0; i < 15; i++) await new Promise(r => process.nextTick(r));
       expect(chrome.tabs.query).toHaveBeenCalled();
     });
 

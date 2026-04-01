@@ -7,3 +7,8 @@ coverage/
 videoplayback*.mp4
 unnamed.png
 .DS_Store
+.claude/
+reports/
+store-assets/demo-scenes/
+store-assets/screenshot-*
+store-assets/shot*

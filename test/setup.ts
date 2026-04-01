@@ -63,6 +63,9 @@ export function resetAllMocks() {
   }) as any);
   vi.mocked(chrome.tabs.discard).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(chrome.tabs.remove).mockReset().mockResolvedValue(undefined as any);
+  vi.mocked(chrome.tabs.get).mockReset().mockImplementation(async (tabId: number) => ({
+    id: tabId, groupId: -1, windowId: 1,
+  }) as any);
   vi.mocked(chrome.tabGroups.query).mockReset().mockResolvedValue([]);
   vi.mocked(chrome.tabGroups.update).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(chrome.windows.getCurrent).mockReset().mockResolvedValue({ id: 1 } as any);
@@ -97,6 +100,8 @@ let groupIdCounter = 100;
     onCreated: new MockEvent(),
     onRemoved: new MockEvent(),
     onUpdated: new MockEvent(),
+    onActivated: new MockEvent(),
+    get: vi.fn((tabId: number) => Promise.resolve({ id: tabId, groupId: -1 })),
   },
   tabGroups: {
     query: vi.fn(() => Promise.resolve([])),

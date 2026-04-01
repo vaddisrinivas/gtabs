@@ -263,6 +263,26 @@ describe('complete - Anthropic API', () => {
     await complete({ ...cfg, baseUrl: 'https://api.groq.com/openai/v1' }, [{ role: 'user', content: 'hi' }]);
     expect(fetch).toHaveBeenCalledWith('https://api.groq.com/openai/v1/chat/completions', expect.anything());
   });
+
+  it('throws on Anthropic 429 rate limit', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response('{"error":{"type":"rate_limit_error"}}', { status: 429 }));
+    await expect(complete(anthropicCfg, [{ role: 'user', content: 'hi' }])).rejects.toThrow('429');
+  });
+
+  it('throws on Anthropic network failure', async () => {
+    (globalThis as any).fetch = vi.fn(async () => { throw new Error('Failed to fetch'); });
+    await expect(complete(anthropicCfg, [{ role: 'user', content: 'hi' }])).rejects.toThrow('Failed to fetch');
+  });
+
+  it('throws on Anthropic malformed response (missing content field)', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ id: 'msg_123' })));
+    await expect(complete(anthropicCfg, [{ role: 'user', content: 'hi' }])).rejects.toThrow();
+  });
+
+  it('throws on Anthropic malformed response (empty content array)', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ content: [] })));
+    await expect(complete(anthropicCfg, [{ role: 'user', content: 'hi' }])).rejects.toThrow();
+  });
 });
 
 describe('fetchOllamaModels', () => {
@@ -283,6 +303,11 @@ describe('fetchOllamaModels', () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({})));
     const models = await fetchOllamaModels('http://localhost:11434');
     expect(models).toEqual([]);
+  });
+
+  it('throws on network error', async () => {
+    (globalThis as any).fetch = vi.fn(async () => { throw new Error('connection refused'); });
+    await expect(fetchOllamaModels('http://localhost:11434')).rejects.toThrow('connection refused');
   });
 });
 
