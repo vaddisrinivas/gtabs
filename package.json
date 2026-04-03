@@ -1,11 +1,11 @@
 {
   "name": "gtabs",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "package": "cd dist && zip -r ../gtabs-extension.zip . && cd .. && echo 'Packaged → gtabs-extension.zip'",
+    "package": "rm -f gtabs-extension.zip && cd dist && zip -r ../gtabs-extension.zip . -x '*.map' && cd .. && echo 'Packaged → gtabs-extension.zip'",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "node build.mjs --watch"
