@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — gTabs - AI Tab Organizer</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 720px; margin: 0 auto; padding: 2rem 1rem; line-height: 1.6; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.25rem; }
+  h2 { font-size: 1.2rem; margin-top: 2rem; border-bottom: 1px solid #e0e0e0; padding-bottom: 0.3rem; }
+  h3 { font-size: 1rem; margin-top: 1.5rem; }
+  ul { padding-left: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #ddd; padding: 0.5rem 0.75rem; text-align: left; }
+  th { background: #f5f5f5; }
+  code { background: #f0f0f0; padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.9em; }
+  a { color: #1a73e8; }
+  .updated { color: #666; font-size: 0.9rem; margin-bottom: 2rem; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy for gTabs - AI Tab Organizer</h1>
+<p class="updated">Last updated: April 3, 2026</p>
+
+<h2>Summary</h2>
+<p>gTabs does not collect, transmit, or store any personal data on external servers. All extension data stays in your browser's local storage. When you choose to use a cloud LLM provider, tab titles and URLs are sent to that provider's API — and only when you explicitly trigger an organize action.</p>
+
+<h2>Data Collection</h2>
+<p>gTabs does <strong>not</strong> collect:</p>
+<ul>
+  <li>Personal information (name, email, account details)</li>
+  <li>Browsing history beyond the current window's open tabs</li>
+  <li>Analytics, telemetry, or usage tracking data</li>
+  <li>Cookies or cross-site tracking identifiers</li>
+</ul>
+
+<h2>Data Stored Locally</h2>
+<p>The following data is stored in your browser's local <code>chrome.storage</code> area and never leaves your device:</p>
+<ul>
+  <li><strong>Extension settings</strong> — your chosen LLM provider, model, behavior preferences, and UI options</li>
+  <li><strong>API keys</strong> — stored locally in <code>chrome.storage.local</code>, never transmitted anywhere except to the provider you selected</li>
+  <li><strong>Domain rules</strong> — custom rules you create for grouping specific domains</li>
+  <li><strong>Learning data</strong> — domain affinity scores, correction history, rejection memory, and co-occurrence patterns used by the Smart Learning system</li>
+  <li><strong>Pinned groups</strong> — group names you've pinned to survive re-organization</li>
+  <li><strong>Usage statistics</strong> — organize count and tabs grouped count, stored locally for your reference</li>
+</ul>
+<p>You can export or delete all stored data at any time from the extension's settings page.</p>
+
+<h2>Data Sent to Third Parties</h2>
+
+<h3>When you use a cloud LLM provider</h3>
+<p>If you configure gTabs to use a cloud-based LLM provider (OpenAI, Anthropic, OpenRouter, Groq, or xAI), the following data is sent to that provider's API <strong>only when you trigger an organize action</strong> (manually or via scheduled re-org):</p>
+<ul>
+  <li><strong>Tab titles</strong> (truncated to your configured length)</li>
+  <li><strong>Tab URLs</strong></li>
+  <li><strong>Your API key</strong> (for authentication with the provider)</li>
+  <li><strong>Grouping hints</strong> derived from your learning data (domain affinities, rejection history)</li>
+</ul>
+<p>This data is sent directly from your browser to the provider's API endpoint. gTabs has no intermediary server.</p>
+<p><strong>Important:</strong> Each cloud LLM provider has its own privacy policy and data retention practices. By choosing a cloud provider, you are subject to that provider's terms. gTabs has no control over how providers handle the data they receive. Review your chosen provider's privacy policy:</p>
+<ul>
+  <li><a href="https://openai.com/policies/privacy-policy">OpenAI Privacy Policy</a></li>
+  <li><a href="https://www.anthropic.com/privacy">Anthropic Privacy Policy</a></li>
+  <li><a href="https://openrouter.ai/privacy">OpenRouter Privacy Policy</a></li>
+  <li><a href="https://groq.com/privacy-policy">Groq Privacy Policy</a></li>
+  <li><a href="https://x.ai/legal/privacy-policy">xAI Privacy Policy</a></li>
+</ul>
+
+<h3>When you use a local LLM provider</h3>
+<p>If you use <strong>Ollama</strong> or <strong>Chrome Built-in AI</strong>, all processing happens on your device. No tab data is sent to any external server.</p>
+
+<h2>Permissions</h2>
+<p>gTabs requests the following Chrome permissions:</p>
+<table>
+  <tr><th>Permission</th><th>Why it's needed</th></tr>
+  <tr><td><code>tabs</code></td><td>Read tab titles and URLs to generate grouping suggestions</td></tr>
+  <tr><td><code>tabGroups</code></td><td>Create, modify, and remove tab groups</td></tr>
+  <tr><td><code>storage</code></td><td>Save your settings, learning data, and API keys locally</td></tr>
+  <tr><td><code>alarms</code></td><td>Run scheduled re-organization and auto-organize checks</td></tr>
+  <tr><td><code>contextMenus</code></td><td>Add right-click menu options for quick access</td></tr>
+  <tr><td><code>windows</code></td><td>Support consolidate-windows feature</td></tr>
+  <tr><td>Host permissions</td><td>Send requests to the LLM API endpoint you selected</td></tr>
+</table>
+
+<h2>Children's Privacy</h2>
+<p>gTabs is not directed at children under 13 and does not knowingly collect data from children.</p>
+
+<h2>Changes to This Policy</h2>
+<p>If this policy is updated, the changes will be published on this page with an updated date. Continued use of the extension after changes constitutes acceptance.</p>
+
+<h2>Contact</h2>
+<p>If you have questions about this privacy policy, open an issue at: <a href="https://github.com/vaddisrinivas/gtabs/issues">github.com/vaddisrinivas/gtabs/issues</a></p>
+
+</body>
+</html>
