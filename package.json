@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "package": "rm -f gtabs-extension.zip && cd dist && xattr -cr . && zip -rX ../gtabs-extension.zip . -x '*.map' && cd .. && echo 'Packaged → gtabs-extension.zip'",
+    "package": "rm -f gtabs-extension.zip && cd dist && (xattr -cr . 2>/dev/null || true) && zip -rX ../gtabs-extension.zip . -x '*.map' && cd .. && echo 'Packaged → gtabs-extension.zip'",
     "test": "vitest run",
     "test:watch": "vitest",
     "dev": "node build.mjs --watch"
