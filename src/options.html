@@ -81,24 +81,6 @@
   }
   .section-desc { font-size: 12px; color: var(--text-muted); margin-left: auto; }
 
-  /* ─── GitHub CTA ─── */
-  .github-card {
-    background: linear-gradient(130deg, rgba(124,106,245,0.2), rgba(79,139,255,0.15));
-    border-color: rgba(124,106,245,0.25);
-    display: flex; align-items: center; justify-content: space-between; gap: 16px;
-  }
-  .github-card h2 { font-size: 16px; -webkit-text-fill-color: initial; color: var(--text); }
-  .github-card p { font-size: 13px; color: #9aa8c8; margin-top: 3px; }
-  .github-btn {
-    display: inline-flex; align-items: center; gap: 7px;
-    background: #fff; color: #000; text-decoration: none;
-    font-weight: 700; font-family: var(--font-display); font-size: 13px;
-    padding: 9px 18px; border-radius: 9px; white-space: nowrap; flex-shrink: 0;
-    transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
-    box-shadow: 0 4px 14px rgba(255,255,255,0.12);
-  }
-  .github-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.22); }
-
   /* ─── Provider grid ─── */
   .provider-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -247,20 +229,6 @@
   }
   .cost-table td { padding: 12px 14px; color: var(--text); border-top: 1px solid var(--border); }
 
-  /* ─── Group stats ─── */
-  .group-stat-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; background: rgba(0,0,0,0.2);
-    border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
-  }
-  .group-stat-color {
-    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-  }
-  .group-stat-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
-  .group-stat-count { font-size: 12px; color: var(--accent); font-weight: 700; font-family: var(--font-display); min-width: 28px; text-align: right; }
-  .group-stat-domains { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
-  .group-stats-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 14px 0; }
-
   .hidden { display: none !important; }
 
   @keyframes fadeUp {
@@ -279,17 +247,6 @@
       <h1>gTabs Settings</h1>
       <p>Configure your AI tab organizer</p>
     </div>
-  </div>
-
-  <!-- GitHub CTA -->
-  <div class="section github-card" style="animation-delay:0ms">
-    <div>
-      <h2>Love gTabs?</h2>
-      <p>Star the repo to help us keep building — it takes 2 seconds!</p>
-    </div>
-    <a href="https://github.com/vaddisrinivas/gtabs" target="_blank" rel="noopener noreferrer" class="github-btn">
-      ⭐️ Star on GitHub
-    </a>
   </div>
 
   <!-- LLM Provider -->
@@ -357,28 +314,6 @@
         <span class="slider-val" id="maxTitleVal">80</span>
       </div>
       <input type="range" id="maxTitleLength" min="20" max="200" value="80" step="5" />
-    </div>
-
-    <div class="slider-group" style="margin-bottom:20px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Stale Tab Age (Hours)</div>
-          <div class="slider-desc">Tabs older than this can be purged via the Focus tool</div>
-        </div>
-        <span class="slider-val" id="staleVal">48</span>
-      </div>
-      <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
-    </div>
-
-    <div class="slider-group" style="margin-bottom:20px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Monthly Spending Cap (USD)</div>
-          <div class="slider-desc">Stops AI calls once this total estimated cost is reached (0 = unlimited)</div>
-        </div>
-        <span class="slider-val" id="spendingCapVal">0</span>
-      </div>
-      <input type="range" id="spendingCapUSD" min="0" max="100" value="0" step="1" />
     </div>
 
     <div class="toggle-row">
@@ -503,15 +438,17 @@
     </div>
   </div>
 
-  <!-- Pinned Groups -->
+  <!-- Rules & Pinning -->
   <div class="section" style="animation-delay:175ms">
     <div class="section-header">
-      <div class="section-icon">📌</div>
-      <h2>Pinned Groups</h2>
-      <span class="section-desc">These groups survive re-organization</span>
+      <div class="section-icon">🔒</div>
+      <h2>Rules &amp; Pinning</h2>
+      <span class="section-desc">Override AI decisions for specific domains &amp; groups</span>
     </div>
+
+    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">📌 Pinned Groups <span style="font-weight:400;color:var(--text-dim)">(survive re-organization)</span></div>
     <div id="pinned-groups"></div>
-    <div class="form-row" style="margin-top:10px">
+    <div class="form-row" style="margin-top:10px;margin-bottom:20px">
       <div class="form-group">
         <input type="text" id="new-pinned-group" placeholder="Group name to pin" />
       </div>
@@ -519,15 +456,8 @@
         <button class="btn-ghost btn-sm" id="add-pinned">+ Pin</button>
       </div>
     </div>
-  </div>
 
-  <!-- Domain Rules -->
-  <div class="section" style="animation-delay:180ms">
-    <div class="section-header">
-      <div class="section-icon">🔒</div>
-      <h2>Domain Rules</h2>
-      <span class="section-desc">Always override AI for specific domains</span>
-    </div>
+    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">🔒 Domain Rules <span style="font-weight:400;color:var(--text-dim)">(always override AI)</span></div>
     <div id="domain-rules"></div>
     <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
       <button class="btn-ghost" style="flex:1" id="add-rule">+ Add Rule</button>
@@ -535,17 +465,6 @@
       <button class="btn-ghost" id="import-rules-csv" title="Import rules from CSV">⬆ Import CSV</button>
     </div>
     <input type="file" id="import-rules-file" accept=".csv" hidden />
-  </div>
-
-  <!-- Group Stats -->
-  <div class="section" style="animation-delay:230ms">
-    <div class="section-header">
-      <div class="section-icon">📈</div>
-      <h2>Group Statistics</h2>
-      <span class="section-desc">Current window tab groups</span>
-      <button class="btn-ghost btn-sm" id="refresh-group-stats" style="margin-left:8px">Refresh</button>
-    </div>
-    <div id="group-stats-body"><div class="group-stats-empty">Open the popup to organize tabs first</div></div>
   </div>
 
   <!-- Power Tools -->
@@ -591,12 +510,35 @@
     <div id="tool-workspace-list"></div>
   </div>
 
-  <!-- Data -->
+  <!-- Data & Usage -->
   <div class="section" style="animation-delay:240ms">
     <div class="section-header">
       <div class="section-icon">📊</div>
       <h2>Data &amp; Usage</h2>
     </div>
+
+    <div class="slider-group">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Stale Tab Age (Hours)</div>
+          <div class="slider-desc">Tabs older than this can be purged via Power Tools</div>
+        </div>
+        <span class="slider-val" id="staleVal">48</span>
+      </div>
+      <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
+    </div>
+
+    <div class="slider-group" style="margin-bottom:20px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Spending Cap (USD)</div>
+          <div class="slider-desc">Stops AI calls once estimated cost reaches this (0 = unlimited)</div>
+        </div>
+        <span class="slider-val" id="spendingCapVal">0</span>
+      </div>
+      <input type="range" id="spendingCapUSD" min="0" max="100" value="0" step="1" />
+    </div>
+
     <div class="data-actions">
       <button class="btn-ghost btn-sm" id="export-data">Export Settings</button>
       <button class="btn-ghost btn-sm" id="import-data">Import Settings</button>
@@ -610,8 +552,6 @@
       </table>
     </div>
   </div>
-
-
 
 </div>
 <script src="options.js"></script>

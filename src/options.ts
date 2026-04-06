@@ -50,8 +50,6 @@ const importFile = $<HTMLInputElement>('import-file');
 const statsLine = $<HTMLDivElement>('stats-line');
 const costTable = $<HTMLTableElement>('cost-table');
 const costBody = $<HTMLTableSectionElement>('cost-body');
-const groupStatsBody = $<HTMLDivElement>('group-stats-body');
-const btnRefreshGroupStats = $<HTMLButtonElement>('refresh-group-stats');
 
 let currentProvider: ProviderPreset | null = null;
 
@@ -512,32 +510,6 @@ for (const el of autoSaveElements) {
 
 // --- Group Stats ---
 
-const TAB_GROUP_COLORS: Record<string, string> = {
-  grey: '#9aa0b8', blue: '#4f8bff', red: '#f28b82', yellow: '#fdd663',
-  green: '#4ade80', pink: '#f48fb1', purple: '#c5a5f5', cyan: '#67d7cc', orange: '#ffb74d',
-};
-
-async function loadGroupStats() {
-  const res = await sendMsg({ type: 'get-group-stats' });
-  groupStatsBody.innerHTML = '';
-  if (!res?.groupStats?.length) {
-    groupStatsBody.innerHTML = '<div class="group-stats-empty">No tab groups in current window</div>';
-    return;
-  }
-  for (const g of res.groupStats as Array<{ name: string; color: string; tabCount: number; domains: string[] }>) {
-    const color = TAB_GROUP_COLORS[g.color] || '#9aa0b8';
-    const row = document.createElement('div');
-    row.className = 'group-stat-row';
-    row.innerHTML = `
-      <span class="group-stat-color" style="background:${color}"></span>
-      <span class="group-stat-name">${esc(g.name)}</span>
-      <span class="group-stat-domains" title="${esc(g.domains.join(', '))}">${esc(g.domains.slice(0, 5).join(', '))}</span>
-      <span class="group-stat-count">${g.tabCount} tab${g.tabCount !== 1 ? 's' : ''}</span>`;
-    groupStatsBody.appendChild(row);
-  }
-}
-
-btnRefreshGroupStats.addEventListener('click', loadGroupStats);
 
 // --- Power Tools ---
 
@@ -663,5 +635,4 @@ $<HTMLButtonElement>('tool-workspace-save').addEventListener('click', async () =
 
 // --- Init ---
 load();
-loadGroupStats();
 refreshToolWorkspaces();
