@@ -181,22 +181,22 @@
 
   <!-- Primary CTA -->
   <div class="primary-row">
-    <button class="btn-primary" id="organize">✨ Organize All</button>
-    <button class="btn-ghost" id="organize-ungrouped">Ungrouped Only</button>
+    <button class="btn-primary" id="organize" aria-label="Organize all tabs">✨ Organize All</button>
+    <button class="btn-ghost" id="organize-ungrouped" aria-label="Organize ungrouped tabs only">Ungrouped Only</button>
   </div>
 
   <!-- Undo -->
   <div class="undo-row">
-    <button class="btn-ghost" id="undo">↩️ Undo</button>
+    <button class="btn-ghost" id="undo" aria-label="Undo last grouping">↩️ Undo</button>
   </div>
 
   <hr />
 
   <div id="status"></div>
-  <input type="text" id="search" placeholder="🔎 Search tabs..." />
+  <input type="text" id="search" placeholder="🔎 Search tabs..." aria-label="Search tabs" />
   <div id="tab-search-results"></div>
   <div id="suggestions"></div>
-  <button id="apply-all" hidden>Apply Groups</button>
+  <button id="apply-all" hidden aria-label="Apply suggested groups">Apply Groups</button>
 
   <div class="footer">
     <span id="stats-text"></span>

@@ -11,7 +11,7 @@ import type {
   RejectionEntry,
   SnoozedTab,
 } from './types';
-import { MODEL_PRICING } from './types';
+import { MODEL_PRICING, SECONDARY_TLDS } from './types';
 import {
   addCost,
   addCorrections,
@@ -270,9 +270,7 @@ export async function restoreSnapshot(snapshot: UndoSnapshot): Promise<void> {
   if (snapshot.ungrouped.length > 0) {
     try {
       await ungroupTabsSafe(snapshot.ungrouped);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch { /* stale tab IDs during restore — expected */ }
   }
 
   const byGroup = new Map<number, number[]>();
@@ -284,9 +282,7 @@ export async function restoreSnapshot(snapshot: UndoSnapshot): Promise<void> {
   for (const [, tabIds] of byGroup) {
     try {
       await groupTabsSafe(tabIds);
-    } catch (err) {
-      console.error(err);
-    }
+    } catch { /* stale tab IDs during restore — expected */ }
   }
 }
 
@@ -470,9 +466,7 @@ export async function applyGroups(suggestions: GroupSuggestion[]): Promise<void>
     if (allTabIds.length > 0) {
       await ungroupTabsSafe(allTabIds);
     }
-  } catch (err) {
-    console.error(err);
-  }
+  } catch { /* stale tab IDs during apply — expected */ }
 
   const colorPrefs = await getGroupColorPrefs();
 
@@ -732,8 +726,10 @@ export async function checkGroupDrift(): Promise<{ drifted: boolean; driftedGrou
       if (domain) domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
     }
 
-    const maxCount = Math.max(...Object.values(domainCounts), 0);
-    const coherence = tabs.length > 0 ? (maxCount / tabs.length) * 100 : 100;
+    const counts = Object.values(domainCounts);
+    if (counts.length === 0) continue; // skip empty/unresolvable groups
+    const maxCount = Math.max(...counts);
+    const coherence = (maxCount / tabs.length) * 100;
 
     if (coherence < settings.groupDriftThreshold) {
       driftedGroups.push(group.title || `Group ${group.id}`);
@@ -1054,7 +1050,7 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
             };
             await addSnoozedTab(entry);
             const delayMs = Math.max(60000, msg.wakeAt - Date.now());
-            chrome.alarms.create(`${SNOOZE_ALARM_PREFIX}${snoozeId}`, { delayInMinutes: delayMs / 60000 });
+            chrome.alarms.create(`${SNOOZE_ALARM_PREFIX}${snoozeId}`, { delayInMinutes: Math.ceil(delayMs / 60000) });
             await chrome.tabs.remove(tabId);
             count++;
           } catch { /* skip tabs that no longer exist */ }
@@ -1097,11 +1093,14 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
 });
 
 let commandInFlight = false;
+let commandInFlightTimer: ReturnType<typeof setTimeout> | null = null;
 chrome.commands?.onCommand?.addListener((command: string) => {
   if (commandInFlight) return;
   commandInFlight = true;
+  // Safety timeout: reset flag after 60s in case command hangs
+  commandInFlightTimer = setTimeout(() => { commandInFlight = false; }, 60_000);
   const p = command === 'organize-tabs' ? organize() : command === 'undo-grouping' ? undoLastGrouping() : null;
-  (p || Promise.resolve()).finally(() => { commandInFlight = false; });
+  (p || Promise.resolve()).finally(() => { commandInFlight = false; if (commandInFlightTimer) clearTimeout(commandInFlightTimer); });
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -1159,20 +1158,22 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
   if (alarm.name.startsWith(SNOOZE_ALARM_PREFIX)) {
     const snoozeId = alarm.name.slice(SNOOZE_ALARM_PREFIX.length);
-    getSnoozedTabs().then(async (tabs) => {
-      const entry = tabs.find(t => t.id === snoozeId);
-      if (entry) {
+    (async () => {
+      try {
+        const tabs = await getSnoozedTabs();
+        const entry = tabs.find(t => t.id === snoozeId);
+        if (!entry) return;
         let windowId: number | undefined;
         try {
           const win = await chrome.windows.getLastFocused({ populate: false });
           if (win.id !== undefined) windowId = win.id;
-        } catch {
-          // best-effort fallback to Chrome default window selection
-        }
+        } catch { /* best-effort fallback */ }
         await chrome.tabs.create({ url: entry.url, active: false, ...(windowId !== undefined ? { windowId } : {}) });
         await removeSnoozedTab(snoozeId);
+      } catch (err) {
+        console.warn('[gTabs] Failed to restore snoozed tab:', err instanceof Error ? err.message : err);
       }
-    }).catch(() => {});
+    })();
   }
 });
 
@@ -1243,8 +1244,7 @@ chrome.tabs.onUpdated?.addListener(async (tabId, changeInfo, tab) => {
         const newDomain = hostnameFromUrl(tab.url);
         if (otherTabs.length > 0 && newDomain) {
           const groupDomains = otherTabs.map(t => hostnameFromUrl(t.url!)).filter(Boolean);
-          // Handle ccTLDs like .co.uk, .com.au: if TLD is 2 chars and SLD is known, use 3 parts
-          const SECONDARY_TLDS = new Set(['co', 'com', 'org', 'net', 'gov', 'edu', 'ac', 'me', 'ltd']);
+          // Handle ccTLDs like .co.uk, .com.au
           const baseDomain = (d: string) => {
             const parts = d.split('.');
             if (parts.length >= 3) {

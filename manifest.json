@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "gTabs - AI Tab Organizer",
-  "version": "0.4.6",
+  "version": "0.4.8",
   "description": "One-click AI tab organizer with editable suggestions, undo, and local or cloud LLM support",
   "permissions": ["tabs", "tabGroups", "storage", "alarms", "contextMenus", "windows"],
   "host_permissions": [

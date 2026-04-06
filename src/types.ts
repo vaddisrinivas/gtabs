@@ -2,6 +2,9 @@ export type Color = 'grey' | 'blue' | 'red' | 'yellow' | 'green' | 'pink' | 'pur
 
 export const COLORS: Color[] = ['grey', 'blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
 
+/** Known secondary-level TLDs for ccTLD base-domain extraction (.co.uk, .com.au, etc.) */
+export const SECONDARY_TLDS = new Set(['co', 'com', 'org', 'net', 'gov', 'edu', 'ac', 'me', 'ltd']);
+
 // --- Provider Presets ---
 
 export interface ProviderPreset {
@@ -328,7 +331,7 @@ export type MessageType =
   | { type: 'merge-split-suggestions' }
   | { type: 'search-tabs'; query: string }
   | { type: 'get-group-stats' }
-  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult; tabResults?: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>; groupStats?: Array<{ name: string; color: string; tabCount: number; domains: string[] }> };
+  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult; tabResults?: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>; groupStats?: Array<{ name: string; color: Color; tabCount: number; domains: string[] }> };
 
 declare global {
   var LanguageModel: {

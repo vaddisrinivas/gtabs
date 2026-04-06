@@ -71,7 +71,7 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function sendMsg(msg: any): Promise<any> {
+function sendMsg(msg: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
   return new Promise(resolve => chrome.runtime.sendMessage(msg, resolve));
 }
 
@@ -545,7 +545,8 @@ $<HTMLButtonElement>('tool-duplicates').addEventListener('click', async () => {
   for (const group of res.duplicates) {
     const div = document.createElement('div');
     div.style.cssText = 'background:rgba(242,139,130,0.05);border:1px solid rgba(242,139,130,0.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:11px;color:#7a8099';
-    div.innerHTML = `<strong style="color:#f28b82">${esc(group[0].title || group[0].url)} (${group.length}x)</strong><br>${group.map((t: any) => esc(t.url)).join('<br>')}`;
+    const first = group[0] as { title?: string; url?: string } | undefined;
+    div.innerHTML = `<strong style="color:#f28b82">${esc(first?.title || first?.url || 'Unknown')} (${group.length}x)</strong><br>${group.map((t: { url?: string }) => esc(t.url || '')).join('<br>')}`;
     toolResults.appendChild(div);
   }
 });

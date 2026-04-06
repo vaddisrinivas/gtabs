@@ -113,7 +113,7 @@ export async function getSettings(): Promise<Settings> {
     void Promise.all([
       chrome.storage.local.set({ [K_API_KEY_LOCAL]: migratedKey }),
       chrome.storage.sync.set({ [K.settings]: { ...syncSettings, apiKey: '' } }),
-    ]);
+    ]).catch(() => { /* migration is best-effort; key remains in sync until next save */ });
   }
   return base;
 }

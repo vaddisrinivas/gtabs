@@ -36,7 +36,7 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-function sendMsg(msg: any): Promise<any> {
+function sendMsg(msg: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
   return new Promise(resolve => chrome.runtime.sendMessage(msg, resolve));
 }
 
@@ -195,7 +195,7 @@ searchInput.addEventListener('input', () => {
   if (currentSuggestions.length > 0) {
     tabSearchResults.innerHTML = '';
     container.querySelectorAll('.tab-list li').forEach(li => {
-      const match = !q || li.textContent!.toLowerCase().includes(q) || li.getAttribute('title')!.toLowerCase().includes(q);
+      const match = !q || (li.textContent ?? '').toLowerCase().includes(q) || (li.getAttribute('title') ?? '').toLowerCase().includes(q);
       (li as HTMLElement).style.display = match ? '' : 'none';
       li.className = q && match ? 'search-match' : '';
     });
