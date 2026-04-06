@@ -4,6 +4,21 @@ import { getSettings, saveSettings, getDomainRules, saveDomainRules } from './st
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+// --- Tab switching ---
+document.querySelectorAll<HTMLButtonElement>('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab!;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', (p as HTMLElement).dataset.tab === tab));
+    try { localStorage.setItem('gtabs-settings-tab', tab); } catch { /* ignore */ }
+  });
+});
+// Restore last tab
+try {
+  const saved = localStorage.getItem('gtabs-settings-tab');
+  if (saved) (document.querySelector(`.tab-btn[data-tab="${saved}"]`) as HTMLButtonElement)?.click();
+} catch { /* ignore */ }
+
 const providerGrid = $<HTMLDivElement>('provider-grid');
 const keyRow = $<HTMLDivElement>('key-row');
 const inApiKey = $<HTMLInputElement>('apiKey');
@@ -11,7 +26,6 @@ const modelSelect = $<HTMLSelectElement>('model-select');
 const testBtn = $<HTMLButtonElement>('test-btn');
 const signupLink = $<HTMLAnchorElement>('signup-link');
 const testResult = $<HTMLSpanElement>('test-result');
-const providerPrivacyNote = $<HTMLDivElement>('provider-privacy-note');
 const inMaxGroups = $<HTMLInputElement>('maxGroups');
 const outMaxGroups = $<HTMLSpanElement>('maxGroupsVal');
 const inMaxTitleLength = $<HTMLInputElement>('maxTitleLength');
@@ -104,7 +118,6 @@ function selectProvider(p: ProviderPreset) {
 
   // Show/hide key row + signup link
   keyRow.classList.toggle('hidden', !p.needsKey);
-  providerPrivacyNote.hidden = p.isBuiltIn === true || p.canFetchModels === true;
   if (p.signupUrl) {
     signupLink.href = p.signupUrl;
     signupLink.hidden = false;
@@ -214,7 +227,6 @@ async function load() {
 
   renderProviderCards(p.id);
   keyRow.classList.toggle('hidden', !p.needsKey);
-  providerPrivacyNote.hidden = p.isBuiltIn === true || p.canFetchModels === true;
 
   inApiKey.value = s.apiKey;
 

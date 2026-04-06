@@ -25,133 +25,107 @@
   }
 
   body {
-    font-family: var(--font-body);
-    font-size: 14px;
-    line-height: 1.6;
+    font-family: var(--font-body); font-size: 14px; line-height: 1.6;
     background: var(--bg);
     background-image:
       radial-gradient(ellipse at 0% 0%, rgba(99,67,210,0.25) 0%, transparent 50%),
       radial-gradient(ellipse at 100% 100%, rgba(41,128,255,0.15) 0%, transparent 50%);
     background-attachment: fixed;
-    color: var(--text);
-    min-height: 100vh;
+    color: var(--text); min-height: 100vh;
   }
 
-  .container { max-width: 720px; margin: 0 auto; padding: 44px 24px 60px; }
+  .container { max-width: 720px; margin: 0 auto; padding: 32px 24px 60px; }
 
   /* ─── Page header ─── */
-  .page-header {
-    display: flex; align-items: center; gap: 12px;
-    margin-bottom: 36px;
-  }
+  .page-header { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
   .logo-mark {
-    width: 44px; height: 44px; border-radius: 12px;
+    width: 40px; height: 40px; border-radius: 12px;
     background: linear-gradient(135deg, #7c6af5, #4f8bff);
     display: flex; align-items: center; justify-content: center;
-    font-size: 22px; box-shadow: 0 4px 20px rgba(124,106,245,0.4);
-    flex-shrink: 0;
+    font-size: 20px; box-shadow: 0 4px 20px rgba(124,106,245,0.4); flex-shrink: 0;
   }
   h1 {
-    font-family: var(--font-display);
-    font-size: 28px; font-weight: 800;
+    font-family: var(--font-display); font-size: 24px; font-weight: 800;
     background: linear-gradient(130deg, #c5d5ff 0%, #7c6af5 100%);
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
-  .page-header p { font-size: 13px; color: var(--text-muted); margin-top: 2px; }
+  .page-header p { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+
+  /* ─── Tab bar ─── */
+  .tab-bar {
+    display: flex; gap: 4px; margin-bottom: 20px;
+    background: rgba(0,0,0,0.3); border-radius: 12px; padding: 4px;
+    border: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10; backdrop-filter: blur(16px);
+  }
+  .tab-btn {
+    flex: 1; background: transparent; border: none; border-radius: 9px;
+    color: var(--text-muted); font-size: 12px; font-weight: 600;
+    font-family: var(--font-display); padding: 9px 12px;
+    cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .tab-btn:hover { color: var(--text); background: rgba(255,255,255,0.05); }
+  .tab-btn.active {
+    color: #fff; background: linear-gradient(130deg, #7c6af5, #4f8bff);
+    box-shadow: 0 2px 12px var(--accent-glow);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeUp 250ms ease both; }
 
   /* ─── Section cards ─── */
   .section {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--surface); border: 1px solid var(--border);
     border-radius: 16px; padding: 24px 28px; margin-bottom: 16px;
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    animation: fadeUp 380ms cubic-bezier(0.16,1,0.3,1) both;
+    backdrop-filter: blur(20px);
   }
-  .section-header {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
-  }
+  .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
   .section-icon {
     font-size: 16px; width: 32px; height: 32px; border-radius: 8px;
-    background: var(--accent-soft); display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
+    background: var(--accent-soft); display: flex; align-items: center; justify-content: center; flex-shrink: 0;
   }
-  h2 {
-    font-family: var(--font-display); font-size: 14px; font-weight: 700;
-    color: var(--text); letter-spacing: 0.2px;
-  }
+  h2 { font-family: var(--font-display); font-size: 14px; font-weight: 700; color: var(--text); }
   .section-desc { font-size: 12px; color: var(--text-muted); margin-left: auto; }
 
   /* ─── Provider grid ─── */
-  .provider-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px; margin-bottom: 20px;
-  }
+  .provider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
   .provider-card {
     background: rgba(0,0,0,0.25); border: 1px solid var(--border);
     border-radius: 11px; padding: 14px 10px; text-align: center;
-    cursor: pointer; transition: all 0.22s cubic-bezier(0.16,1,0.3,1);
-    position: relative; overflow: hidden;
+    cursor: pointer; transition: all 0.22s; position: relative; overflow: hidden;
   }
-  .provider-card::before {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(120deg, transparent 30%, rgba(124,106,245,0.1), transparent 70%);
-    transform: translateX(-160%); transition: transform 0.5s ease;
-  }
-  .provider-card:hover::before { transform: translateX(160%); }
   .provider-card:hover { border-color: var(--border-accent); background: rgba(124,106,245,0.08); transform: translateY(-2px); }
-  .provider-card.selected {
-    border-color: var(--accent); background: var(--accent-soft);
-    box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--accent-glow);
-  }
+  .provider-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent), 0 4px 16px var(--accent-glow); }
   .provider-card.disabled { opacity: 0.3; cursor: not-allowed; }
   .provider-card .name { font-size: 12px; font-weight: 600; font-family: var(--font-display); color: var(--text); }
-  .provider-card .badge {
-    font-size: 9px; font-weight: 700; font-family: var(--font-display);
-    border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 5px;
-    background: var(--accent); color: #fff;
-  }
+  .provider-card .badge { font-size: 9px; font-weight: 700; font-family: var(--font-display); border-radius: 4px; padding: 2px 6px; display: inline-block; margin-top: 5px; background: var(--accent); color: #fff; }
   .provider-card .badge.local { background: #22c55e; }
-  .provider-card .badge.manual { background: #555a70; }
 
   /* ─── Form elements ─── */
   .form-group { margin-bottom: 16px; }
   .form-group:last-child { margin-bottom: 0; }
-  label { display: block; font-size: 12px; font-weight: 600; color: #9aa0b8; margin-bottom: 6px; letter-spacing: 0.3px; }
+  label { display: block; font-size: 12px; font-weight: 600; color: #9aa0b8; margin-bottom: 6px; }
   label a { color: var(--accent); text-decoration: none; margin-left: 6px; }
-  label a:hover { text-decoration: underline; }
   input[type="text"], input[type="password"], input[type="number"], select {
     width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
     border-radius: 9px; color: var(--text); padding: 9px 13px; font-size: 13px;
     font-family: var(--font-body); transition: all 0.18s;
   }
-  input:focus, select:focus {
-    outline: none; border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft); background: rgba(124,106,245,0.05);
-  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
   select { cursor: pointer; }
-
   .form-row { display: flex; gap: 12px; align-items: flex-end; }
   .form-row > .form-group { flex: 1; margin-bottom: 0; }
-  .form-row > .form-action { flex-shrink: 0; padding-bottom: 0; }
+  .form-row > .form-action { flex-shrink: 0; }
 
   /* ─── Buttons ─── */
-  .btn {
-    background: linear-gradient(130deg, #7c6af5 0%, #4f8bff 100%);
-    color: #fff; border: none; border-radius: 9px; padding: 9px 18px;
-    font-size: 13px; font-weight: 700; font-family: var(--font-display);
-    cursor: pointer; transition: all 0.18s; white-space: nowrap;
-  }
+  .btn { background: linear-gradient(130deg, #7c6af5, #4f8bff); color: #fff; border: none; border-radius: 9px; padding: 9px 18px; font-size: 13px; font-weight: 700; font-family: var(--font-display); cursor: pointer; transition: all 0.18s; }
   .btn:hover { transform: translateY(-1px); box-shadow: 0 5px 18px var(--accent-glow); }
-  .btn:disabled { opacity: 0.4; transform: none; box-shadow: none; cursor: not-allowed; }
-  .btn-ghost {
-    background: var(--surface); border: 1px solid var(--border);
-    color: var(--text-muted); border-radius: 9px; padding: 9px 18px;
-    font-size: 13px; font-weight: 600; font-family: var(--font-display);
-    cursor: pointer; transition: all 0.18s;
-  }
-  .btn-ghost:hover { background: var(--surface-hover); color: var(--text); border-color: rgba(255,255,255,0.14); }
+  .btn:disabled { opacity: 0.4; transform: none; cursor: not-allowed; }
+  .btn-ghost { background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); border-radius: 9px; padding: 9px 18px; font-size: 13px; font-weight: 600; font-family: var(--font-display); cursor: pointer; transition: all 0.18s; }
+  .btn-ghost:hover { background: var(--surface-hover); color: var(--text); }
+  .btn-ghost.danger { color: var(--red); }
+  .btn-ghost.danger:hover { background: rgba(242,139,130,0.1); }
   .btn-sm { padding: 7px 14px; font-size: 12px; }
-
   .test-result { font-size: 12px; font-weight: 600; margin-left: 10px; }
   .test-result.ok { color: var(--green); }
   .test-result.fail { color: var(--red); }
@@ -163,44 +137,23 @@
   .slider-label { font-size: 13px; font-weight: 500; color: var(--text); }
   .slider-desc { font-size: 11px; color: var(--text-muted); margin-top: 3px; }
   .slider-val { font-family: var(--font-display); font-weight: 800; color: var(--accent); font-size: 18px; min-width: 32px; text-align: right; }
-
   input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; cursor: pointer; }
-  input[type=range]::-webkit-slider-runnable-track {
-    height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px;
-  }
-  input[type=range]::-webkit-slider-thumb {
-    -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%;
-    background: var(--accent); margin-top: -7px; cursor: pointer;
-    box-shadow: 0 0 10px var(--accent-glow), 0 2px 6px rgba(0,0,0,0.4);
-    transition: transform 0.1s;
-  }
+  input[type=range]::-webkit-slider-runnable-track { height: 5px; background: rgba(255,255,255,0.1); border-radius: 3px; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; height: 18px; width: 18px; border-radius: 50%; background: var(--accent); margin-top: -7px; box-shadow: 0 0 10px var(--accent-glow); transition: transform 0.1s; }
   input[type=range]::-webkit-slider-thumb:active { transform: scale(1.2); }
   input[type=range]:focus { outline: none; }
 
   /* ─── Toggle rows ─── */
-  .toggle-row {
-    display: flex; align-items: flex-start; gap: 14px;
-    padding: 14px 16px; background: rgba(0,0,0,0.2);
-    border: 1px solid var(--border); border-radius: 11px;
-    margin-bottom: 10px; transition: border-color 0.18s;
-  }
+  .toggle-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 11px; margin-bottom: 10px; transition: border-color 0.18s; }
   .toggle-row:last-child { margin-bottom: 0; }
   .toggle-row:hover { border-color: rgba(124,106,245,0.25); }
   .toggle-row-text { flex: 1; }
   .toggle-row-text span { font-size: 13px; font-weight: 500; color: var(--text); }
-  .toggle-row-text p { font-size: 11px; color: var(--text-muted); margin-top: 2px; line-height: 1.5; }
+  .toggle-row-text p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
   .toggle-switch { position: relative; display: inline-block; width: 42px; height: 23px; flex-shrink: 0; margin-top: 1px; }
   .toggle-switch input { opacity: 0; width: 0; height: 0; }
-  .toggle-slider {
-    position: absolute; cursor: pointer; inset: 0;
-    background: rgba(255,255,255,0.08); border-radius: 23px;
-    border: 1px solid rgba(255,255,255,0.12); transition: 0.25s cubic-bezier(0.16,1,0.3,1);
-  }
-  .toggle-slider::before {
-    position: absolute; content: ''; height: 17px; width: 17px;
-    left: 2px; bottom: 2px; background: #6a7090; border-radius: 50%;
-    transition: 0.25s cubic-bezier(0.16,1,0.3,1);
-  }
+  .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: rgba(255,255,255,0.08); border-radius: 23px; border: 1px solid rgba(255,255,255,0.12); transition: 0.25s; }
+  .toggle-slider::before { position: absolute; content: ''; height: 17px; width: 17px; left: 2px; bottom: 2px; background: #6a7090; border-radius: 50%; transition: 0.25s; }
   .toggle-switch input:checked + .toggle-slider { background: var(--accent-soft); border-color: var(--accent); }
   .toggle-switch input:checked + .toggle-slider::before { transform: translateX(19px); background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 
@@ -211,28 +164,18 @@
 
   /* ─── Data section ─── */
   .data-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
-  .stats-chip {
-    font-size: 13px; color: var(--text-muted); padding: 12px 14px;
-    background: rgba(0,0,0,0.25); border-radius: 10px;
-    border: 1px dashed rgba(255,255,255,0.08);
-  }
+  .stats-chip { font-size: 13px; color: var(--text-muted); padding: 12px 14px; background: rgba(0,0,0,0.25); border-radius: 10px; border: 1px dashed rgba(255,255,255,0.08); }
   .stats-chip strong { color: var(--accent); font-weight: 600; }
-
-  .cost-table {
-    width: 100%; font-size: 12px; margin-top: 14px;
-    border-collapse: collapse; border-radius: 11px; overflow: hidden;
-    background: rgba(0,0,0,0.2);
-  }
-  .cost-table th {
-    text-align: left; color: var(--text-muted); font-weight: 600;
-    padding: 10px 14px; background: rgba(255,255,255,0.03); font-size: 11px; letter-spacing: 0.5px;
-  }
+  .cost-table { width: 100%; font-size: 12px; margin-top: 14px; border-collapse: collapse; border-radius: 11px; overflow: hidden; background: rgba(0,0,0,0.2); }
+  .cost-table th { text-align: left; color: var(--text-muted); font-weight: 600; padding: 10px 14px; background: rgba(255,255,255,0.03); font-size: 11px; }
   .cost-table td { padding: 12px 14px; color: var(--text); border-top: 1px solid var(--border); }
 
+  .sub-label { font-size: 12px; font-weight: 600; color: #9aa0b8; margin-bottom: 8px; font-family: var(--font-display); }
+  .sub-label span { font-weight: 400; color: var(--text-dim); }
   .hidden { display: none !important; }
 
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(12px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 </style>
@@ -240,316 +183,163 @@
 <body>
 <div class="container">
 
-  <!-- Page header -->
   <div class="page-header">
     <div class="logo-mark">🗂️</div>
-    <div>
-      <h1>gTabs Settings</h1>
-      <p>Configure your AI tab organizer</p>
-    </div>
+    <div><h1>gTabs Settings</h1><p>Configure your AI tab organizer</p></div>
   </div>
 
-  <!-- LLM Provider -->
-  <div class="section" style="animation-delay:60ms">
-    <div class="section-header">
-      <div class="section-icon">🤖</div>
-      <h2>LLM Provider</h2>
-    </div>
-    <div class="provider-grid" id="provider-grid"></div>
-
-    <div class="form-group hidden" id="key-row">
-      <label>API Key <a id="signup-link" href="#" target="_blank" hidden>Get free key →</a></label>
-      <input type="password" id="apiKey" placeholder="sk-..." />
-      <div class="slider-desc" id="provider-privacy-note" style="margin-top:6px">
-        Cloud providers receive tab titles and URLs to generate groups.
-      </div>
-    </div>
-    <div class="form-row" style="margin-top:14px">
-      <div class="form-group">
-        <label>Model</label>
-        <select id="model-select"></select>
-      </div>
-      <div class="form-action" style="display:flex;align-items:center;gap:8px;padding-bottom:0;margin-bottom:0;">
-        <button class="btn btn-sm" id="test-btn">Test</button>
-        <span class="test-result" id="test-result"></span>
-      </div>
-    </div>
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="provider">🤖 Provider</button>
+    <button class="tab-btn" data-tab="behavior">⚙️ Behavior</button>
+    <button class="tab-btn" data-tab="rules">🔒 Rules</button>
+    <button class="tab-btn" data-tab="tools">⚡ Tools</button>
   </div>
 
-  <!-- Behavior -->
-  <div class="section" style="animation-delay:120ms">
-    <div class="section-header">
-      <div class="section-icon">⚡️</div>
-      <h2>Behavior</h2>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Max Groups</div>
-          <div class="slider-desc">Limit the number of tab groups AI creates</div>
+  <!-- ═══ TAB: Provider ═══ -->
+  <div class="tab-panel active" data-tab="provider">
+    <div class="section">
+      <div class="section-header"><div class="section-icon">🤖</div><h2>LLM Provider</h2></div>
+      <div class="provider-grid" id="provider-grid"></div>
+      <div class="form-group hidden" id="key-row">
+        <label>API Key <a id="signup-link" href="#" target="_blank" hidden>Get free key →</a></label>
+        <input type="password" id="apiKey" placeholder="sk-..." />
+        <div class="slider-desc" style="margin-top:6px">Cloud providers receive tab titles and URLs to generate groups.</div>
+      </div>
+      <div class="form-row" style="margin-top:14px">
+        <div class="form-group"><label>Model</label><select id="model-select"></select></div>
+        <div class="form-action" style="display:flex;align-items:center;gap:8px">
+          <button class="btn btn-sm" id="test-btn">Test</button>
+          <span class="test-result" id="test-result"></span>
         </div>
-        <span class="slider-val" id="maxGroupsVal">6</span>
-      </div>
-      <input type="range" id="maxGroups" min="2" max="15" value="6" />
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Auto-organize Threshold</div>
-          <div class="slider-desc">Trigger AI when ungrouped tab count reaches this</div>
-        </div>
-        <span class="slider-val" id="thresholdVal">5</span>
-      </div>
-      <input type="range" id="threshold" min="2" max="25" value="5" />
-    </div>
-
-    <div class="slider-group" style="margin-bottom:20px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Title Truncation Length</div>
-          <div class="slider-desc">Max tab title characters sent to the LLM</div>
-        </div>
-        <span class="slider-val" id="maxTitleVal">80</span>
-      </div>
-      <input type="range" id="maxTitleLength" min="20" max="200" value="80" step="5" />
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="autoTrigger" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Auto-organize</span>
-        <p>Silently run AI grouping when ungrouped tabs exceed your threshold.</p>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="mergeMode" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Protect Existing Groups</span>
-        <p>Only organize ungrouped tabs — never reshuffle groups you've already made.</p>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="silentAutoAdd" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Zero-LLM Fast Routing</span>
-        <p>Instantly route new tabs via domain affinity and history — no AI calls.</p>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="autoPinApps" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Auto-pin Web Apps</span>
-        <p>Pin Gmail, Calendar, Jira, Spotify and similar apps to the left automatically.</p>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="smartUngroup" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Smart Ungrouping</span>
-        <p>Auto-remove tabs from groups when you navigate to an unrelated domain.</p>
       </div>
     </div>
   </div>
 
-  <!-- Smart Learning -->
-  <div class="section" style="animation-delay:150ms">
-    <div class="section-header">
-      <div class="section-icon">🧠</div>
-      <h2>Smart Learning</h2>
-      <span class="section-desc">Learn from your behavior over time</span>
+  <!-- ═══ TAB: Behavior ═══ -->
+  <div class="tab-panel" data-tab="behavior">
+    <div class="section">
+      <div class="section-header"><div class="section-icon">⚡️</div><h2>Organization</h2></div>
+
+      <div class="slider-group">
+        <div class="slider-header"><div><div class="slider-label">Max Groups</div><div class="slider-desc">Limit the number of tab groups AI creates</div></div><span class="slider-val" id="maxGroupsVal">6</span></div>
+        <input type="range" id="maxGroups" min="2" max="15" value="6" />
+      </div>
+      <div class="slider-group">
+        <div class="slider-header"><div><div class="slider-label">Auto-organize Threshold</div><div class="slider-desc">Trigger AI when ungrouped tab count reaches this</div></div><span class="slider-val" id="thresholdVal">5</span></div>
+        <input type="range" id="threshold" min="2" max="25" value="5" />
+      </div>
+      <div class="slider-group" style="margin-bottom:20px">
+        <div class="slider-header"><div><div class="slider-label">Title Truncation</div><div class="slider-desc">Max tab title characters sent to the LLM</div></div><span class="slider-val" id="maxTitleVal">80</span></div>
+        <input type="range" id="maxTitleLength" min="20" max="200" value="80" step="5" />
+      </div>
+
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="autoTrigger" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Auto-organize</span><p>Silently run AI grouping when ungrouped tabs exceed your threshold.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="mergeMode" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Protect Existing Groups</span><p>Only organize ungrouped tabs — never reshuffle existing groups.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="silentAutoAdd" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Zero-LLM Fast Routing</span><p>Instantly route new tabs via domain affinity — no AI calls.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="autoPinApps" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Auto-pin Web Apps</span><p>Pin Gmail, Calendar, Slack, Spotify to the left automatically.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="smartUngroup" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Smart Ungrouping</span><p>Auto-remove tabs from groups when navigating to unrelated domains.</p></div></div>
     </div>
 
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="enableCorrectionTracking" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Correction Tracking</span>
-        <p>Learn when you rename groups or move tabs before applying — corrections count 3x.</p>
+    <div class="section">
+      <div class="section-header"><div class="section-icon">🧠</div><h2>Learning</h2><span class="section-desc">Improve over time</span></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="enableCorrectionTracking" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Correction Tracking</span><p>Learn from group renames and tab moves — corrections count 3x.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="enableRejectionMemory" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Rejection Memory</span><p>Remember removed groups and avoid repeating those groupings.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="enableGroupDrift" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Group Drift Detection</span><p>Warn when groups become incoherent and need refreshing.</p></div></div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="enablePatternMining" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Pattern Mining</span><p>Analyze history to find domains frequently grouped together.</p></div></div>
+      <div class="slider-group" style="margin-top:16px">
+        <div class="slider-header"><div><div class="slider-label">Drift Threshold</div><div class="slider-desc">Coherence % below which a group is flagged</div></div><span class="slider-val" id="driftThresholdVal">50</span></div>
+        <input type="range" id="groupDriftThreshold" min="20" max="80" value="50" step="5" />
       </div>
     </div>
 
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="enableRejectionMemory" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Rejection Memory</span>
-        <p>Remember when you remove suggested groups and avoid repeating those groupings.</p>
+    <div class="section">
+      <div class="section-header"><div class="section-icon">📅</div><h2>Scheduled Re-org</h2></div>
+      <div class="form-group"><label>Schedule</label><select id="reorgSchedule"><option value="off">Off</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select></div>
+      <div class="slider-group" style="margin-top:16px">
+        <div class="slider-header"><div><div class="slider-label">Time of Day</div><div class="slider-desc">Hour (0-23) when scheduled re-org runs</div></div><span class="slider-val" id="reorgTimeVal">9</span></div>
+        <input type="range" id="reorgTime" min="0" max="23" value="9" />
       </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="enableGroupDrift" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Group Drift Detection</span>
-        <p>Warn when existing groups become incoherent and may need refreshing.</p>
-      </div>
-    </div>
-
-    <div class="toggle-row">
-      <label class="toggle-switch"><input type="checkbox" id="enablePatternMining" /><span class="toggle-slider"></span></label>
-      <div class="toggle-row-text">
-        <span>Pattern Mining</span>
-        <p>Analyze history to find domains that are frequently grouped together.</p>
-      </div>
-    </div>
-
-    <div class="slider-group" style="margin-top:16px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Drift Threshold</div>
-          <div class="slider-desc">Coherence % below which a group is flagged as drifted</div>
-        </div>
-        <span class="slider-val" id="driftThresholdVal">50</span>
-      </div>
-      <input type="range" id="groupDriftThreshold" min="20" max="80" value="50" step="5" />
     </div>
   </div>
 
-  <!-- Scheduled Re-org -->
-  <div class="section" style="animation-delay:165ms">
-    <div class="section-header">
-      <div class="section-icon">📅</div>
-      <h2>Scheduled Re-org</h2>
-      <span class="section-desc">Automatically re-organize on a schedule</span>
-    </div>
-
-    <div class="form-group">
-      <label>Schedule</label>
-      <select id="reorgSchedule">
-        <option value="off">Off</option>
-        <option value="daily">Daily</option>
-        <option value="weekly">Weekly</option>
-      </select>
-    </div>
-
-    <div class="slider-group" style="margin-top:16px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Time of Day</div>
-          <div class="slider-desc">Hour (0-23) when scheduled re-org runs</div>
-        </div>
-        <span class="slider-val" id="reorgTimeVal">9</span>
+  <!-- ═══ TAB: Rules ═══ -->
+  <div class="tab-panel" data-tab="rules">
+    <div class="section">
+      <div class="section-header"><div class="section-icon">📌</div><h2>Pinned Groups</h2><span class="section-desc">Survive re-organization</span></div>
+      <div id="pinned-groups"></div>
+      <div class="form-row" style="margin-top:10px">
+        <div class="form-group"><input type="text" id="new-pinned-group" placeholder="Group name to pin" /></div>
+        <div class="form-action"><button class="btn-ghost btn-sm" id="add-pinned">+ Pin</button></div>
       </div>
-      <input type="range" id="reorgTime" min="0" max="23" value="9" />
+    </div>
+
+    <div class="section">
+      <div class="section-header"><div class="section-icon">🔒</div><h2>Domain Rules</h2><span class="section-desc">Always override AI</span></div>
+      <div id="domain-rules"></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn-ghost" style="flex:1" id="add-rule">+ Add Rule</button>
+        <button class="btn-ghost" id="export-rules-csv">⬇ Export CSV</button>
+        <button class="btn-ghost" id="import-rules-csv">⬆ Import CSV</button>
+      </div>
+      <input type="file" id="import-rules-file" accept=".csv" hidden />
     </div>
   </div>
 
-  <!-- Rules & Pinning -->
-  <div class="section" style="animation-delay:175ms">
-    <div class="section-header">
-      <div class="section-icon">🔒</div>
-      <h2>Rules &amp; Pinning</h2>
-      <span class="section-desc">Override AI decisions for specific domains &amp; groups</span>
-    </div>
-
-    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">📌 Pinned Groups <span style="font-weight:400;color:var(--text-dim)">(survive re-organization)</span></div>
-    <div id="pinned-groups"></div>
-    <div class="form-row" style="margin-top:10px;margin-bottom:20px">
-      <div class="form-group">
-        <input type="text" id="new-pinned-group" placeholder="Group name to pin" />
+  <!-- ═══ TAB: Tools ═══ -->
+  <div class="tab-panel" data-tab="tools">
+    <div class="section">
+      <div class="section-header"><div class="section-icon">⚡</div><h2>Power Tools</h2></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn-ghost" id="tool-duplicates">🧬 Find Duplicates</button>
+        <button class="btn-ghost" id="tool-focus">🎯 Focus Mode</button>
+        <button class="btn-ghost" id="tool-sort">🔤 Sort Groups</button>
+        <button class="btn-ghost danger" id="tool-clear">🧹 Clear All Groups</button>
+        <button class="btn-ghost" id="tool-export-md">📋 Export Markdown</button>
       </div>
-      <div class="form-action">
-        <button class="btn-ghost btn-sm" id="add-pinned">+ Pin</button>
+      <div id="tool-status" style="font-size:11px;color:#7c6af5;min-height:16px;font-weight:600;font-family:var(--font-display);margin-bottom:8px"></div>
+      <div id="tool-results"></div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <div class="sub-label">💤 Snooze Active Tab</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+        <select id="tool-snooze-duration" style="flex:1;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px">
+          <option value="3600000">1 hour</option><option value="10800000">3 hours</option><option value="28800000">8 hours</option><option value="86400000" selected>Tomorrow</option><option value="604800000">Next week</option>
+        </select>
+        <button class="btn-ghost" id="tool-snooze">Snooze</button>
       </div>
-    </div>
 
-    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">🔒 Domain Rules <span style="font-weight:400;color:var(--text-dim)">(always override AI)</span></div>
-    <div id="domain-rules"></div>
-    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <button class="btn-ghost" style="flex:1" id="add-rule">+ Add Rule</button>
-      <button class="btn-ghost" id="export-rules-csv" title="Download rules as CSV">⬇ Export CSV</button>
-      <button class="btn-ghost" id="import-rules-csv" title="Import rules from CSV">⬆ Import CSV</button>
-    </div>
-    <input type="file" id="import-rules-file" accept=".csv" hidden />
-  </div>
-
-  <!-- Power Tools -->
-  <div class="section" style="animation-delay:235ms">
-    <div class="section-header">
-      <div class="section-icon">⚡</div>
-      <h2>Power Tools</h2>
-      <span class="section-desc">Quick actions for tab management</span>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-      <button class="btn-ghost" id="tool-duplicates">🧬 Find Duplicates</button>
-      <button class="btn-ghost" id="tool-focus">🎯 Focus Mode</button>
-      <button class="btn-ghost" id="tool-sort">🔤 Sort Groups</button>
-      <button class="btn-ghost danger" id="tool-clear">🧹 Clear All Groups</button>
-      <button class="btn-ghost" id="tool-export-md">📋 Export as Markdown</button>
-    </div>
-    <div id="tool-status" style="font-size:11px;color:#7c6af5;min-height:16px;font-weight:600;font-family:var(--font-display);margin-bottom:8px"></div>
-    <div id="tool-results"></div>
-
-    <hr style="margin:14px 0" />
-
-    <!-- Snooze -->
-    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">💤 Snooze Active Tab</div>
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-      <select id="tool-snooze-duration" style="flex:1;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e2e4eb;padding:5px 8px;font-size:12px">
-        <option value="3600000">1 hour</option>
-        <option value="10800000">3 hours</option>
-        <option value="28800000">8 hours</option>
-        <option value="86400000" selected>Tomorrow</option>
-        <option value="604800000">Next week</option>
-      </select>
-      <button class="btn-ghost" id="tool-snooze">Snooze</button>
-    </div>
-
-    <hr style="margin:14px 0" />
-
-    <!-- Workspaces -->
-    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">💾 Workspaces</div>
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-      <input type="text" id="tool-workspace-name" placeholder="Save current as workspace..." style="flex:1" />
-      <button class="btn-ghost" id="tool-workspace-save">Save</button>
-    </div>
-    <div id="tool-workspace-list"></div>
-  </div>
-
-  <!-- Data & Usage -->
-  <div class="section" style="animation-delay:240ms">
-    <div class="section-header">
-      <div class="section-icon">📊</div>
-      <h2>Data &amp; Usage</h2>
-    </div>
-
-    <div class="slider-group">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Stale Tab Age (Hours)</div>
-          <div class="slider-desc">Tabs older than this can be purged via Power Tools</div>
-        </div>
-        <span class="slider-val" id="staleVal">48</span>
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <div class="sub-label">💾 Workspaces</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <input type="text" id="tool-workspace-name" placeholder="Save current as workspace..." style="flex:1" />
+        <button class="btn-ghost" id="tool-workspace-save">Save</button>
       </div>
-      <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
+      <div id="tool-workspace-list"></div>
     </div>
 
-    <div class="slider-group" style="margin-bottom:20px">
-      <div class="slider-header">
-        <div>
-          <div class="slider-label">Spending Cap (USD)</div>
-          <div class="slider-desc">Stops AI calls once estimated cost reaches this (0 = unlimited)</div>
-        </div>
-        <span class="slider-val" id="spendingCapVal">0</span>
+    <div class="section">
+      <div class="section-header"><div class="section-icon">📊</div><h2>Data &amp; Usage</h2></div>
+      <div class="slider-group">
+        <div class="slider-header"><div><div class="slider-label">Stale Tab Age (Hours)</div><div class="slider-desc">Tabs older than this can be purged</div></div><span class="slider-val" id="staleVal">48</span></div>
+        <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
       </div>
-      <input type="range" id="spendingCapUSD" min="0" max="100" value="0" step="1" />
-    </div>
-
-    <div class="data-actions">
-      <button class="btn-ghost btn-sm" id="export-data">Export Settings</button>
-      <button class="btn-ghost btn-sm" id="import-data">Import Settings</button>
-      <input type="file" id="import-file" accept=".json" hidden />
-    </div>
-    <div class="stats-chip" id="stats-line"></div>
-    <div style="overflow-x:auto">
-      <table class="cost-table" id="cost-table" hidden>
-        <thead><tr><th>Provider</th><th>Input Tokens</th><th>Output Tokens</th><th>Est. Cost</th></tr></thead>
-        <tbody id="cost-body"></tbody>
-      </table>
+      <div class="slider-group" style="margin-bottom:20px">
+        <div class="slider-header"><div><div class="slider-label">Spending Cap (USD)</div><div class="slider-desc">Stops AI calls at this cost (0 = unlimited)</div></div><span class="slider-val" id="spendingCapVal">0</span></div>
+        <input type="range" id="spendingCapUSD" min="0" max="100" value="0" step="1" />
+      </div>
+      <div class="data-actions">
+        <button class="btn-ghost btn-sm" id="export-data">Export Settings</button>
+        <button class="btn-ghost btn-sm" id="import-data">Import Settings</button>
+        <input type="file" id="import-file" accept=".json" hidden />
+      </div>
+      <div class="stats-chip" id="stats-line"></div>
+      <div style="overflow-x:auto">
+        <table class="cost-table" id="cost-table" hidden>
+          <thead><tr><th>Provider</th><th>Input Tokens</th><th>Output Tokens</th><th>Est. Cost</th></tr></thead>
+          <tbody id="cost-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
