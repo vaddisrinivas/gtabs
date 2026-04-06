@@ -548,6 +548,49 @@
     <div id="group-stats-body"><div class="group-stats-empty">Open the popup to organize tabs first</div></div>
   </div>
 
+  <!-- Power Tools -->
+  <div class="section" style="animation-delay:235ms">
+    <div class="section-header">
+      <div class="section-icon">⚡</div>
+      <h2>Power Tools</h2>
+      <span class="section-desc">Quick actions for tab management</span>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button class="btn-ghost" id="tool-duplicates">🧬 Find Duplicates</button>
+      <button class="btn-ghost" id="tool-focus">🎯 Focus Mode</button>
+      <button class="btn-ghost" id="tool-sort">🔤 Sort Groups</button>
+      <button class="btn-ghost danger" id="tool-clear">🧹 Clear All Groups</button>
+      <button class="btn-ghost" id="tool-export-md">📋 Export as Markdown</button>
+    </div>
+    <div id="tool-status" style="font-size:11px;color:#7c6af5;min-height:16px;font-weight:600;font-family:var(--font-display);margin-bottom:8px"></div>
+    <div id="tool-results"></div>
+
+    <hr style="margin:14px 0" />
+
+    <!-- Snooze -->
+    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">💤 Snooze Active Tab</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+      <select id="tool-snooze-duration" style="flex:1;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e2e4eb;padding:5px 8px;font-size:12px">
+        <option value="3600000">1 hour</option>
+        <option value="10800000">3 hours</option>
+        <option value="28800000">8 hours</option>
+        <option value="86400000" selected>Tomorrow</option>
+        <option value="604800000">Next week</option>
+      </select>
+      <button class="btn-ghost" id="tool-snooze">Snooze</button>
+    </div>
+
+    <hr style="margin:14px 0" />
+
+    <!-- Workspaces -->
+    <div style="font-size:12px;font-weight:600;color:#9aa0b8;margin-bottom:8px;font-family:var(--font-display)">💾 Workspaces</div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+      <input type="text" id="tool-workspace-name" placeholder="Save current as workspace..." style="flex:1" />
+      <button class="btn-ghost" id="tool-workspace-save">Save</button>
+    </div>
+    <div id="tool-workspace-list"></div>
+  </div>
+
   <!-- Data -->
   <div class="section" style="animation-delay:240ms">
     <div class="section-header">

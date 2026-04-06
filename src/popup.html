@@ -58,10 +58,7 @@
   .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(124,106,245,0.45); }
   .btn-primary:disabled { opacity: 0.45; transform: none; box-shadow: none; cursor: default; }
 
-  /* ─── Secondary actions row ─── */
-  .secondary-row {
-    display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;
-  }
+  /* ─── Ghost button ─── */
   .btn-ghost {
     background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
     color: #b0b8d0; border-radius: 8px; padding: 5px 11px;
@@ -70,8 +67,9 @@
   }
   .btn-ghost:hover { background: rgba(255,255,255,0.1); color: #c5d5ff; border-color: rgba(197,213,255,0.25); }
   .btn-ghost:disabled { opacity: 0.4; transform: none; cursor: default; }
-  .btn-ghost.danger { color: #f28b82; }
-  .btn-ghost.danger:hover { background: rgba(242,139,130,0.12); border-color: rgba(242,139,130,0.3); color: #f28b82; }
+
+  /* ─── Undo row ─── */
+  .undo-row { margin-bottom: 10px; }
 
   /* ─── Divider ─── */
   hr { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 0 0 10px; }
@@ -160,34 +158,6 @@
   }
   #apply-all:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(124,106,245,0.4); }
 
-  /* ─── Dupes ─── */
-  .dupe-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .dupe-group {
-    background: rgba(242,139,130,0.05); border: 1px solid rgba(242,139,130,0.12);
-    border-radius: 9px; padding: 8px 10px; margin-bottom: 6px;
-  }
-  .dupe-group .dupe-title { font-size: 12px; font-weight: 600; color: #f28b82; margin-bottom: 3px; font-family: var(--font-display); }
-  .dupe-group .dupe-list { font-size: 11px; color: #7a8099; list-style: none; padding-left: 2px; }
-
-  /* ─── Workspaces ─── */
-  #workspaces-section { margin-bottom: 8px; }
-  .workspace-save-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
-  #workspace-name {
-    flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.09);
-    border-radius: 8px; color: #e2e4eb; padding: 5px 9px; font-size: 11px; font-family: var(--font-body);
-    transition: all 0.18s;
-  }
-  #workspace-name:focus { outline: none; border-color: #7c6af5; box-shadow: 0 0 0 3px rgba(124,106,245,0.15); }
-  #workspace-name::placeholder { color: #555a70; }
-  .workspace-row {
-    display: flex; align-items: center; gap: 6px;
-    padding: 5px 8px; border-radius: 8px; margin-bottom: 3px;
-    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
-  }
-  .workspace-row:hover { background: rgba(255,255,255,0.07); }
-  .workspace-name-label { flex: 1; font-size: 11px; color: #c5d5ff; font-family: var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .workspace-time { font-size: 10px; color: #555a70; flex-shrink: 0; }
-
   /* ─── Footer ─── */
   .footer {
     display: flex; justify-content: space-between; align-items: center;
@@ -195,23 +165,6 @@
     border-top: 1px solid rgba(255,255,255,0.05);
   }
   .footer .cost { color: #7c6af5; font-weight: 600; font-family: var(--font-display); font-size: 11px; }
-
-  /* ─── Drift Warning ─── */
-  #drift-warning {
-    background: rgba(242,139,130,0.08); border: 1px solid rgba(242,139,130,0.2);
-    border-radius: 9px; padding: 8px 12px; margin-bottom: 8px;
-    display: flex; align-items: center; gap: 8px; font-size: 11px;
-  }
-  #drift-warning .drift-text { flex: 1; color: #f28b82; font-weight: 500; }
-
-  /* ─── Merge/Split ─── */
-  .merge-split-card {
-    background: rgba(124,106,245,0.06); border: 1px solid rgba(124,106,245,0.15);
-    border-radius: 8px; padding: 7px 10px; margin-bottom: 5px;
-    font-size: 11px; color: #b0b8d0;
-  }
-  .merge-split-card strong { color: #c5d5ff; }
-  .merge-split-card .ms-icon { margin-right: 4px; }
 
   @keyframes cardIn {
     from { opacity: 0; transform: translateY(5px); }
@@ -232,63 +185,18 @@
     <button class="btn-ghost" id="organize-ungrouped">Ungrouped Only</button>
   </div>
 
-  <!-- Secondary actions: all flat, no section -->
-  <div class="secondary-row">
+  <!-- Undo -->
+  <div class="undo-row">
     <button class="btn-ghost" id="undo">↩️ Undo</button>
-    <button class="btn-ghost" id="find-dupes">🧬 Duplicates</button>
-    <button class="btn-ghost" id="focus-mode" title="Collapse all groups except the active one">🎯 Focus</button>
-    <button class="btn-ghost" id="sort-groups" title="Sort groups alphabetically by domain">🔤 Sort</button>
-    <button class="btn-ghost danger" id="delete-groups" title="Ungroup all grouped tabs in this window">🧹 Clear Groups</button>
-    <button class="btn-ghost" id="export-markdown" title="Copy tab groups as Markdown to clipboard">📋 Export MD</button>
-    <button class="btn-ghost" id="snooze-tab" title="Snooze active tab — remove now, re-open later">💤 Snooze</button>
-  </div>
-  <div id="snooze-panel" hidden style="display:flex;gap:6px;align-items:center;margin-bottom:8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);border-radius:8px;padding:7px 10px;">
-    <select id="snooze-duration" style="flex:1;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#e2e4eb;padding:4px 7px;font-size:11px;">
-      <option value="3600000">1 hour</option>
-      <option value="10800000">3 hours</option>
-      <option value="28800000">8 hours</option>
-      <option value="86400000" selected>Tomorrow</option>
-      <option value="604800000">Next week</option>
-    </select>
-    <button class="btn-ghost" id="snooze-confirm" style="padding:4px 10px;font-size:11px;">Snooze</button>
-    <button class="btn-ghost" id="snooze-cancel" style="padding:4px 8px;font-size:11px;">✕</button>
   </div>
 
   <hr />
-
-  <div id="drift-warning" hidden>
-    <span class="drift-text"></span>
-    <button class="btn-ghost" id="drift-refresh" style="padding:3px 8px;font-size:10px;">Refresh</button>
-  </div>
 
   <div id="status"></div>
   <input type="text" id="search" placeholder="🔎 Search tabs..." />
   <div id="tab-search-results"></div>
   <div id="suggestions"></div>
   <button id="apply-all" hidden>Apply Groups</button>
-
-  <div id="duplicates-wrapper" hidden>
-    <div class="dupe-controls">
-      <span style="font-size:12px;font-weight:600;color:#e2e4eb;font-family:var(--font-display);">Identical Tabs</span>
-      <button class="btn-ghost danger" id="close-dupes">Close Extras</button>
-    </div>
-    <div id="duplicates"></div>
-  </div>
-
-  <div id="merge-split-wrapper" hidden>
-    <div style="font-size:11px;font-weight:600;color:#9aa0b8;margin-bottom:5px;font-family:var(--font-display);">Suggestions</div>
-    <div id="merge-split"></div>
-  </div>
-
-  <hr />
-
-  <div id="workspaces-section">
-    <div class="workspace-save-row">
-      <input type="text" id="workspace-name" placeholder="💾 Save current as workspace..." />
-      <button class="btn-ghost" id="save-workspace" title="Save current tabs &amp; groups as a named workspace">Save</button>
-    </div>
-    <div id="workspace-list"></div>
-  </div>
 
   <div class="footer">
     <span id="stats-text"></span>

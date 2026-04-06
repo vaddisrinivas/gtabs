@@ -1,4 +1,4 @@
-import type { Color, GroupSuggestion, TabInfo, CorrectionEntry, RejectionEntry, MergeSplitResult } from './types';
+import type { Color, GroupSuggestion, TabInfo, CorrectionEntry, RejectionEntry } from './types';
 import { COLORS } from './types';
 import { getSuggestions, getSettings, saveSettings } from './storage';
 
@@ -8,33 +8,16 @@ const btnOrganize = $<HTMLButtonElement>('organize');
 const btnOrganizeUngrouped = $<HTMLButtonElement>('organize-ungrouped');
 const btnApply = $<HTMLButtonElement>('apply-all');
 const btnUndo = $<HTMLButtonElement>('undo');
-const btnDupes = $<HTMLButtonElement>('find-dupes');
 const btnSettings = $<HTMLButtonElement>('open-settings');
-const btnFocusMode = $<HTMLButtonElement>('focus-mode');
-const btnSortGroups = $<HTMLButtonElement>('sort-groups');
-const btnDeleteGroups = $<HTMLButtonElement>('delete-groups');
-const btnExportMarkdown = $<HTMLButtonElement>('export-markdown');
-const btnSnoozeTab = $<HTMLButtonElement>('snooze-tab');
-const snoozePanel = $<HTMLDivElement>('snooze-panel');
-const snoozeDuration = $<HTMLSelectElement>('snooze-duration');
-const btnSnoozeConfirm = $<HTMLButtonElement>('snooze-confirm');
-const btnSnoozeCancel = $<HTMLButtonElement>('snooze-cancel');
 const status = $<HTMLDivElement>('status');
 const container = $<HTMLDivElement>('suggestions');
-const dupesContainer = $<HTMLDivElement>('duplicates');
-const dupesWrapper = $<HTMLDivElement>('duplicates-wrapper');
-const btnCloseDupes = $<HTMLButtonElement>('close-dupes');
 const searchInput = $<HTMLInputElement>('search');
 const tabSearchResults = $<HTMLDivElement>('tab-search-results');
 const statsText = $<HTMLSpanElement>('stats-text');
 const costText = $<HTMLSpanElement>('cost-text');
-const workspaceNameInput = $<HTMLInputElement>('workspace-name');
-const btnSaveWorkspace = $<HTMLButtonElement>('save-workspace');
-const workspaceList = $<HTMLDivElement>('workspace-list');
 
 let currentSuggestions: GroupSuggestion[] = [];
 let originalSuggestions: GroupSuggestion[] = [];
-let currentDupeGroups: TabInfo[][] = [];
 
 function clearSuggestionUi() {
   currentSuggestions = [];
@@ -57,21 +40,6 @@ function sendMsg(msg: any): Promise<any> {
   return new Promise(resolve => chrome.runtime.sendMessage(msg, resolve));
 }
 
-async function runPowerAction(
-  action: { type: string; [key: string]: unknown },
-  pendingLabel: string,
-  onSuccess: string | ((res: any) => string),
-) {
-  setStatus(pendingLabel);
-  const res = await sendMsg(action);
-  if (res?.error) {
-    setStatus(res.error, true);
-    return null;
-  }
-  setStatus(typeof onSuccess === 'function' ? onSuccess(res) : onSuccess);
-  return res;
-}
-
 function deepCloneSuggestions(suggestions: GroupSuggestion[]): GroupSuggestion[] {
   return suggestions.map(g => ({
     name: g.name,
@@ -81,7 +49,6 @@ function deepCloneSuggestions(suggestions: GroupSuggestion[]): GroupSuggestion[]
 }
 
 function computeCorrections(original: GroupSuggestion[], current: GroupSuggestion[]): CorrectionEntry['corrections'] {
-  // Build tab→group map for original
   const originalMap = new Map<number, string>();
   for (const g of original) {
     for (const t of g.tabs) originalMap.set(t.id, g.name);
@@ -168,7 +135,6 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
       const idx = Number(el.dataset.i);
       const removed = currentSuggestions[idx];
 
-      // Track rejections
       if (removed) {
         const rejections: RejectionEntry[] = [];
         const now = Date.now();
@@ -190,6 +156,8 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
 
   btnApply.hidden = false;
 }
+
+// --- Tab search ---
 
 function renderTabSearchResults(results: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>) {
   tabSearchResults.innerHTML = '';
@@ -225,7 +193,6 @@ searchInput.addEventListener('input', () => {
   const q = searchInput.value.toLowerCase();
 
   if (currentSuggestions.length > 0) {
-    // Filter suggestion cards
     tabSearchResults.innerHTML = '';
     container.querySelectorAll('.tab-list li').forEach(li => {
       const match = !q || li.textContent!.toLowerCase().includes(q) || li.getAttribute('title')!.toLowerCase().includes(q);
@@ -237,7 +204,6 @@ searchInput.addEventListener('input', () => {
       card.style.opacity = !q || hasVisible ? '1' : '0.4';
     });
   } else {
-    // Global tab search mode
     if (searchTabsTimer) clearTimeout(searchTabsTimer);
     tabSearchResults.innerHTML = '';
     if (!q) return;
@@ -248,7 +214,7 @@ searchInput.addEventListener('input', () => {
   }
 });
 
-// --- Keyboard navigation (F5) ---
+// --- Keyboard navigation ---
 
 let focusedCardIdx = -1;
 
@@ -293,51 +259,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-function renderDuplicates(groups: TabInfo[][]) {
-  currentDupeGroups = groups;
-  dupesContainer.innerHTML = '';
-  if (!groups.length) {
-    dupesWrapper.hidden = true;
-    setStatus('No duplicates found');
-    return;
-  }
-
-  dupesWrapper.hidden = false;
-  setStatus(`Found ${groups.length} duplicate group(s)`);
-
-  for (const g of groups) {
-    const div = document.createElement('div');
-    div.className = 'dupe-group';
-    div.innerHTML = `<div class="dupe-title">${esc(g[0].title || g[0].url)} (${g.length}x)</div>
-      <ul class="dupe-list">${g.map(t => `<li title="${esc(t.url)}">${esc(t.url)}</li>`).join('')}</ul>`;
-    dupesContainer.appendChild(div);
-  }
-}
-
-btnFocusMode.addEventListener('click', async () => {
-  await runPowerAction(
-    { type: 'focus-group' },
-    'Collapsing other groups...',
-    'Focus mode activated',
-  );
-});
-
-btnSortGroups.addEventListener('click', async () => {
-  await runPowerAction(
-    { type: 'sort-groups' },
-    'Sorting tab groups...',
-    res => `Sorted ${res?.count ?? 0} groups`,
-  );
-});
-
-btnDeleteGroups.addEventListener('click', async () => {
-  const res = await runPowerAction(
-    { type: 'delete-all-groups' },
-    'Clearing all tab groups...',
-    res => (res?.count ? `Cleared ${res.count} groups` : 'No tab groups to clear'),
-  );
-  if (res) clearSuggestionUi();
-});
+// --- Core actions ---
 
 async function doOrganize(ungroupedOnly: boolean) {
   setStatus('Organizing...');
@@ -345,18 +267,21 @@ async function doOrganize(ungroupedOnly: boolean) {
   btnOrganizeUngrouped.disabled = true;
   container.innerHTML = '';
   btnApply.hidden = true;
-  dupesWrapper.hidden = true;
 
   const res = await sendMsg({ type: ungroupedOnly ? 'organize-ungrouped' : 'organize' });
 
   btnOrganize.disabled = false;
   btnOrganizeUngrouped.disabled = false;
 
-  if (res?.error) {
+  if (!res) {
+    setStatus('No response — try again', true);
+  } else if (res.error) {
     setStatus(res.error, true);
-  } else if (res?.suggestions) {
+  } else if (res.suggestions) {
     setStatus(`${res.suggestions.length} groups suggested`);
     renderSuggestions(res.suggestions);
+  } else {
+    setStatus('No suggestions returned', true);
   }
 }
 
@@ -368,7 +293,6 @@ btnApply.addEventListener('click', async () => {
   setStatus('Applying...');
   btnApply.disabled = true;
 
-  // Track corrections (user edits before applying)
   const corrections = computeCorrections(originalSuggestions, currentSuggestions);
   if (corrections.length > 0) {
     sendMsg({ type: 'record-corrections', corrections: { timestamp: Date.now(), corrections } });
@@ -387,41 +311,11 @@ btnUndo.addEventListener('click', async () => {
   setStatus(res?.error ? res.error : 'Undone!', Boolean(res?.error));
 });
 
-btnDupes.addEventListener('click', async () => {
-  setStatus('Scanning...');
-  const res = await sendMsg({ type: 'find-duplicates' });
-  if (res?.duplicates) renderDuplicates(res.duplicates);
-});
-
-btnCloseDupes.addEventListener('click', async () => {
-  if (!currentDupeGroups.length) return;
-  const idsToRemove = currentDupeGroups.flatMap(group => group.slice(1).map(tab => tab.id));
-  if (idsToRemove.length === 0) return;
-
-  setStatus(`Closing ${idsToRemove.length} extra tab(s)...`);
-  await chrome.tabs.remove(idsToRemove);
-  setStatus(`Closed ${idsToRemove.length} extra tab(s) successfully`);
-  btnDupes.click();
-});
-
 btnSettings.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
 
-btnExportMarkdown.addEventListener('click', async () => {
-  setStatus('Exporting...');
-  const res = await sendMsg({ type: 'export-markdown' });
-  if (res?.error) {
-    setStatus(res.error, true);
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(res.markdown || '');
-    setStatus('Markdown copied to clipboard!');
-  } catch {
-    setStatus('Export failed: clipboard access denied', true);
-  }
-});
+// --- Footer ---
 
 async function refreshFooter() {
   const [statsRes, costsRes] = await Promise.all([
@@ -438,33 +332,7 @@ async function refreshFooter() {
   }
 }
 
-function renderMergeSplit(result: MergeSplitResult) {
-  const wrapper = document.getElementById('merge-split-wrapper');
-  const container = document.getElementById('merge-split');
-  if (!wrapper || !container) return;
-
-  if (!result.merges.length && !result.splits.length) {
-    wrapper.hidden = true;
-    return;
-  }
-
-  wrapper.hidden = false;
-  container.innerHTML = '';
-
-  for (const m of result.merges) {
-    const div = document.createElement('div');
-    div.className = 'merge-split-card';
-    div.innerHTML = `<span class="ms-icon">&#x1F500;</span> Merge <strong>${esc(m.group1)}</strong> + <strong>${esc(m.group2)}</strong>? (${m.overlap}% overlap)`;
-    container.appendChild(div);
-  }
-
-  for (const s of result.splits) {
-    const div = document.createElement('div');
-    div.className = 'merge-split-card';
-    div.innerHTML = `<span class="ms-icon">&#x2702;</span> Split <strong>${esc(s.group)}</strong>? (${s.tabCount} tabs, ${s.domainCount} domains)`;
-    container.appendChild(div);
-  }
-}
+// --- Init ---
 
 (async () => {
   const pending = await getSuggestions();
@@ -472,127 +340,5 @@ function renderMergeSplit(result: MergeSplitResult) {
     setStatus(`${pending.length} pending suggestions`);
     renderSuggestions(pending);
   }
-  await Promise.all([refreshFooter(), refreshWorkspaceList()]);
-
-  // Check group drift
-  const settings = await getSettings();
-  if (settings.enableGroupDrift) {
-    const driftRes = await sendMsg({ type: 'check-group-drift' });
-    const driftWarning = document.getElementById('drift-warning');
-    if (driftRes?.drifted && driftWarning) {
-      driftWarning.hidden = false;
-      driftWarning.querySelector('.drift-text')!.textContent =
-        `Groups may need refreshing: ${driftRes.driftedGroups.join(', ')}`;
-    }
-  }
-
-  // Check merge/split suggestions
-  const msRes = await sendMsg({ type: 'merge-split-suggestions' });
-  if (msRes?.mergeSplit) renderMergeSplit(msRes.mergeSplit);
+  await refreshFooter();
 })();
-
-// Drift warning refresh button
-document.getElementById('drift-refresh')?.addEventListener('click', () => {
-  doOrganize(false);
-  const dw = document.getElementById('drift-warning');
-  if (dw) dw.hidden = true;
-});
-
-// --- Workspaces ---
-
-function formatWorkspaceTime(savedAt: number): string {
-  const diff = Date.now() - savedAt;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return mins <= 1 ? 'just now' : `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-async function refreshWorkspaceList() {
-  const res = await sendMsg({ type: 'list-workspaces' });
-  const names: string[] = res?.workspaceNames || [];
-  workspaceList.innerHTML = '';
-
-  if (!names.length) return;
-
-  // Fetch workspace details to show time
-  const wsData = await sendMsg({ type: 'export-data' });
-  const workspaces = wsData?.data?.workspaces || {};
-
-  for (const name of names) {
-    const ws = workspaces[name];
-    const row = document.createElement('div');
-    row.className = 'workspace-row';
-    const tabCount = ws?.tabs?.length ?? '?';
-    const timeLabel = ws?.savedAt ? formatWorkspaceTime(ws.savedAt) : '';
-    row.innerHTML = `
-      <span class="workspace-name-label" title="${esc(name)}">${esc(name)}</span>
-      <span class="workspace-time">${tabCount} tabs · ${timeLabel}</span>
-      <button class="btn-ghost ws-restore" data-name="${esc(name)}" style="padding:3px 8px;font-size:10px;">Restore</button>
-      <button class="btn-ghost danger ws-delete" data-name="${esc(name)}" style="padding:3px 6px;font-size:10px;">✕</button>`;
-    workspaceList.appendChild(row);
-  }
-
-  workspaceList.querySelectorAll<HTMLButtonElement>('.ws-restore').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const name = btn.dataset.name!;
-      setStatus(`Restoring "${name}"...`);
-      const res = await sendMsg({ type: 'restore-workspace', name });
-      if (res?.error) setStatus(res.error, true);
-      else setStatus(`Restored "${name}" in new window`);
-    });
-  });
-
-  workspaceList.querySelectorAll<HTMLButtonElement>('.ws-delete').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const name = btn.dataset.name!;
-      const res = await sendMsg({ type: 'delete-workspace', name });
-      if (res?.error) { setStatus(res.error, true); return; }
-      await refreshWorkspaceList();
-    });
-  });
-}
-
-btnSaveWorkspace.addEventListener('click', async () => {
-  const name = workspaceNameInput.value.trim();
-  if (!name) { setStatus('Enter a workspace name', true); return; }
-  setStatus('Saving workspace...');
-  const res = await sendMsg({ type: 'save-workspace', name });
-  if (res?.error) {
-    setStatus(res.error, true);
-  } else {
-    workspaceNameInput.value = '';
-    setStatus(`Workspace "${name}" saved`);
-    await refreshWorkspaceList();
-  }
-});
-
-// --- Snooze ---
-
-btnSnoozeTab.addEventListener('click', () => {
-  snoozePanel.hidden = !snoozePanel.hidden;
-});
-
-btnSnoozeCancel.addEventListener('click', () => {
-  snoozePanel.hidden = true;
-});
-
-btnSnoozeConfirm.addEventListener('click', async () => {
-  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  if (!activeTab?.id) {
-    setStatus('No active tab to snooze', true);
-    return;
-  }
-  const delayMs = Number(snoozeDuration.value) || 86400000;
-  const wakeAt = Date.now() + delayMs;
-  setStatus('Snoozing...');
-  const res = await sendMsg({ type: 'snooze-tabs', tabIds: [activeTab.id], wakeAt });
-  snoozePanel.hidden = true;
-  if (res?.error) {
-    setStatus(res.error, true);
-  } else {
-    const label = snoozeDuration.options[snoozeDuration.selectedIndex]?.text || 'later';
-    setStatus(`Tab snoozed until ${label}`);
-  }
-});

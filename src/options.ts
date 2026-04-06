@@ -539,6 +539,129 @@ async function loadGroupStats() {
 
 btnRefreshGroupStats.addEventListener('click', loadGroupStats);
 
+// --- Power Tools ---
+
+const toolStatus = $<HTMLDivElement>('tool-status');
+const toolResults = $<HTMLDivElement>('tool-results');
+
+function setToolStatus(msg: string, isError = false) {
+  toolStatus.textContent = msg;
+  toolStatus.style.color = isError ? '#f28b82' : '#7c6af5';
+}
+
+$<HTMLButtonElement>('tool-duplicates').addEventListener('click', async () => {
+  setToolStatus('Scanning for duplicates...');
+  toolResults.innerHTML = '';
+  const res = await sendMsg({ type: 'find-duplicates' });
+  if (!res?.duplicates?.length) {
+    setToolStatus('No duplicates found');
+    return;
+  }
+  setToolStatus(`Found ${res.duplicates.length} duplicate group(s)`);
+  for (const group of res.duplicates) {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:rgba(242,139,130,0.05);border:1px solid rgba(242,139,130,0.12);border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:11px;color:#7a8099';
+    div.innerHTML = `<strong style="color:#f28b82">${esc(group[0].title || group[0].url)} (${group.length}x)</strong><br>${group.map((t: any) => esc(t.url)).join('<br>')}`;
+    toolResults.appendChild(div);
+  }
+});
+
+$<HTMLButtonElement>('tool-focus').addEventListener('click', async () => {
+  setToolStatus('Collapsing other groups...');
+  const res = await sendMsg({ type: 'focus-group' });
+  setToolStatus(res?.error ? res.error : 'Focus mode activated', Boolean(res?.error));
+});
+
+$<HTMLButtonElement>('tool-sort').addEventListener('click', async () => {
+  setToolStatus('Sorting tab groups...');
+  const res = await sendMsg({ type: 'sort-groups' });
+  setToolStatus(res?.error ? res.error : `Sorted ${res?.count ?? 0} groups`, Boolean(res?.error));
+});
+
+$<HTMLButtonElement>('tool-clear').addEventListener('click', async () => {
+  setToolStatus('Clearing all tab groups...');
+  const res = await sendMsg({ type: 'delete-all-groups' });
+  setToolStatus(res?.error ? res.error : (res?.count ? `Cleared ${res.count} groups` : 'No groups to clear'), Boolean(res?.error));
+});
+
+$<HTMLButtonElement>('tool-export-md').addEventListener('click', async () => {
+  setToolStatus('Exporting...');
+  const res = await sendMsg({ type: 'export-markdown' });
+  if (res?.error) { setToolStatus(res.error, true); return; }
+  try {
+    await navigator.clipboard.writeText(res.markdown || '');
+    setToolStatus('Markdown copied to clipboard!');
+  } catch {
+    setToolStatus('Clipboard access denied', true);
+  }
+});
+
+$<HTMLButtonElement>('tool-snooze').addEventListener('click', async () => {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab?.id) { setToolStatus('No active tab to snooze', true); return; }
+  const delayMs = Number(($<HTMLSelectElement>('tool-snooze-duration')).value) || 86400000;
+  const wakeAt = Date.now() + delayMs;
+  setToolStatus('Snoozing...');
+  const res = await sendMsg({ type: 'snooze-tabs', tabIds: [activeTab.id], wakeAt });
+  if (res?.error) { setToolStatus(res.error, true); return; }
+  const sel = $<HTMLSelectElement>('tool-snooze-duration');
+  setToolStatus(`Tab snoozed until ${sel.options[sel.selectedIndex]?.text || 'later'}`);
+});
+
+// Workspace tools
+const toolWsList = $<HTMLDivElement>('tool-workspace-list');
+
+async function refreshToolWorkspaces() {
+  const res = await sendMsg({ type: 'list-workspaces' });
+  const names: string[] = res?.workspaceNames || [];
+  toolWsList.innerHTML = '';
+  if (!names.length) return;
+
+  const wsData = await sendMsg({ type: 'export-data' });
+  const workspaces = wsData?.data?.workspaces || {};
+
+  for (const name of names) {
+    const ws = workspaces[name];
+    const tabCount = ws?.tabs?.length ?? '?';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:5px 8px;border-radius:8px;margin-bottom:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);font-size:11px';
+    row.innerHTML = `
+      <span style="flex:1;color:#c5d5ff;font-family:var(--font-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(name)}</span>
+      <span style="color:#555a70;flex-shrink:0">${tabCount} tabs</span>
+      <button class="btn-ghost btn-sm ws-tool-restore" data-name="${esc(name)}" style="padding:3px 8px;font-size:10px">Restore</button>
+      <button class="btn-ghost btn-sm ws-tool-delete" data-name="${esc(name)}" style="padding:3px 6px;font-size:10px;color:#f28b82">✕</button>`;
+    toolWsList.appendChild(row);
+  }
+
+  toolWsList.querySelectorAll<HTMLButtonElement>('.ws-tool-restore').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      setToolStatus(`Restoring "${btn.dataset.name}"...`);
+      const res = await sendMsg({ type: 'restore-workspace', name: btn.dataset.name });
+      setToolStatus(res?.error ? res.error : `Restored "${btn.dataset.name}" in new window`, Boolean(res?.error));
+    });
+  });
+
+  toolWsList.querySelectorAll<HTMLButtonElement>('.ws-tool-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await sendMsg({ type: 'delete-workspace', name: btn.dataset.name });
+      await refreshToolWorkspaces();
+    });
+  });
+}
+
+$<HTMLButtonElement>('tool-workspace-save').addEventListener('click', async () => {
+  const input = $<HTMLInputElement>('tool-workspace-name');
+  const name = input.value.trim();
+  if (!name) { setToolStatus('Enter a workspace name', true); return; }
+  setToolStatus('Saving workspace...');
+  const res = await sendMsg({ type: 'save-workspace', name });
+  if (res?.error) { setToolStatus(res.error, true); return; }
+  input.value = '';
+  setToolStatus(`Workspace "${name}" saved`);
+  await refreshToolWorkspaces();
+});
+
 // --- Init ---
 load();
 loadGroupStats();
+refreshToolWorkspaces();
