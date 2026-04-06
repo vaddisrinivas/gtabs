@@ -13,6 +13,11 @@
   [Star on GitHub](https://github.com/vaddisrinivas/gtabs) · [Install](https://github.com/vaddisrinivas/gtabs/releases) · [Report Issue](https://github.com/vaddisrinivas/gtabs/issues)
 
   <br/>
+
+  [![Featured in 10+ Awesome Lists](https://img.shields.io/badge/Featured-10%2B%20Awesome%20Lists-blue?style=flat-square)](https://github.com/vaddisrinivas/gtabs#featured-in)
+  [![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-yellow?style=flat-square)](https://chromewebstore.google.com/detail/gtabs)
+
+  <br/>
 </div>
 
 ![gTabs demo](store-assets/demo-v04.gif)
