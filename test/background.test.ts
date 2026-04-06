@@ -19,8 +19,10 @@ import {
   isTabUrlAllowed,
   purgeStaleTabs,
   sortCurrentGroupsByDomain,
-  snapshotCurrentState, restoreSnapshot, undoLastGrouping
+  snapshotCurrentState, restoreSnapshot, undoLastGrouping,
+  _resetAutoCheckCooldown,
 } from '../src/background';
+
 
 // ---------- Pure utility unit tests ----------
 
@@ -29,7 +31,7 @@ describe('isTabUrlAllowed', () => {
   it('allows http URLs', () => expect(isTabUrlAllowed('http://example.com')).toBe(true));
   it('blocks chrome:// URLs', () => expect(isTabUrlAllowed('chrome://extensions')).toBe(false));
   it('blocks chrome-extension:// URLs', () => expect(isTabUrlAllowed('chrome-extension://abc/popup.html')).toBe(false));
-  it('allows about:blank (regex requires ://, not matched by about:blank)', () => expect(isTabUrlAllowed('about:blank')).toBe(true));
+  it('blocks about:blank', () => expect(isTabUrlAllowed('about:blank')).toBe(false));
   it('blocks edge:// URLs', () => expect(isTabUrlAllowed('edge://newtab')).toBe(false));
   it('blocks null', () => expect(isTabUrlAllowed(null)).toBe(false));
   it('blocks undefined', () => expect(isTabUrlAllowed(undefined)).toBe(false));
@@ -183,7 +185,8 @@ describe('organize', () => {
   it('sets badge text to group count', async () => {
     mockFetchLLM('[{"name":"Dev","color":"blue","tabIds":[1]}]');
     await organize();
-    expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '1' });
+    // 1 LLM group + 1 "Other" group for unassigned tabs
+    expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '2' });
   });
 
   it('returns error on LLM failure', async () => {
@@ -489,6 +492,7 @@ describe('power tools', () => {
 describe('event listeners', () => {
   beforeEach(async () => {
     vi.useFakeTimers();
+    _resetAutoCheckCooldown();
     vi.mocked(chrome.tabs.query).mockResolvedValue([]);
     await saveSettings({ ...DEFAULT_SETTINGS, autoTrigger: true, threshold: 0, silentAutoAdd: true });
   });
@@ -537,8 +541,8 @@ describe('event listeners', () => {
     ] as any);
     mockFetchLLM('[]');
 
-    await (chrome.tabs.onCreated as any).callListeners();
-    await (chrome.tabs.onRemoved as any).callListeners();
+    await (chrome.tabs.onCreated as any).callListeners({ id: 1, url: 'https://a.com' });
+    await (chrome.tabs.onCreated as any).callListeners({ id: 2, url: 'https://b.com' });
     
     // We called it twice, but it should debounce to 1 organize call
     await vi.runAllTimersAsync();
@@ -585,6 +589,7 @@ describe('event listeners', () => {
   });
 
   it('checks auto-trigger on tab update even when silent auto add is off', async () => {
+    _resetAutoCheckCooldown();
     await saveSettings({ ...DEFAULT_SETTINGS, ...TEST_SETTINGS, autoTrigger: true, threshold: 0, silentAutoAdd: false });
     vi.mocked(chrome.tabs.query).mockResolvedValue([
       { id: 1, title: 'A', url: 'https://a.com', groupId: -1 },
@@ -612,7 +617,8 @@ describe('event listeners', () => {
     it('handles onInstalled', async () => {
       await (chrome.runtime.onInstalled as any).callListeners();
       expect(chrome.alarms.create).toHaveBeenCalled();
-      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(4);
+      // 4 action-context menus + 1 parent from rebuildAddToGroupMenus (no focused groups in tests)
+      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(5);
     });
 
     it('handles commands', async () => {

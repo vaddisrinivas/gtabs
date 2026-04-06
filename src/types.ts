@@ -109,6 +109,10 @@ export interface Settings extends LLMConfig {
   reorgTime: number;
   // Pinned groups
   pinnedGroups: string[];
+  // Smart ungrouping
+  smartUngroup: boolean;
+  // Spending cap (0 = unlimited)
+  spendingCapUSD: number;
 }
 
 export interface AffinityMap {
@@ -143,6 +147,15 @@ export interface RejectionEntry {
   timestamp: number;
   domain: string;
   rejectedGroup: string;
+}
+
+// --- Snoozed Tabs ---
+
+export interface SnoozedTab {
+  id: string;
+  url: string;
+  title: string;
+  wakeAt: number;
 }
 
 // --- Merge/Split Suggestions ---
@@ -265,6 +278,8 @@ export const DEFAULT_SETTINGS: Settings = {
   reorgSchedule: 'off',
   reorgTime: 9,
   pinnedGroups: [],
+  smartUngroup: false,
+  spendingCapUSD: 0,
 };
 
 export const DEFAULT_STATS: Stats = {
@@ -298,21 +313,22 @@ export type MessageType =
   | { type: 'check-chrome-ai' }
   | { type: 'fetch-ollama-models' }
   | { type: 'consolidate-windows' }
-  | { type: 'snooze-tabs' }
+  | { type: 'snooze-tabs'; tabIds: number[]; wakeAt: number }
   | { type: 'purge-stale' }
   | { type: 'focus-group' }
   | { type: 'delete-all-groups' }
-  | { type: 'bookmark-groups' }
   | { type: 'export-markdown' }
   | { type: 'sort-groups' }
   | { type: 'save-workspace'; name: string }
   | { type: 'restore-workspace'; name: string }
-  | { type: 'rag-chat'; query: string }
+  | { type: 'delete-workspace'; name: string }
   | { type: 'record-corrections'; corrections: CorrectionEntry }
   | { type: 'record-rejections'; rejections: RejectionEntry[] }
   | { type: 'check-group-drift' }
   | { type: 'merge-split-suggestions' }
-  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult };
+  | { type: 'search-tabs'; query: string }
+  | { type: 'get-group-stats' }
+  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult; tabResults?: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>; groupStats?: Array<{ name: string; color: string; tabCount: number; domains: string[] }> };
 
 declare global {
   var LanguageModel: {

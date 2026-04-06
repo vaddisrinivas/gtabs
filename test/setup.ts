@@ -69,8 +69,10 @@ export function resetAllMocks() {
   vi.mocked(chrome.tabGroups.query).mockReset().mockResolvedValue([]);
   vi.mocked(chrome.tabGroups.update).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(chrome.windows.getCurrent).mockReset().mockResolvedValue({ id: 1 } as any);
+  vi.mocked(chrome.windows.getLastFocused).mockReset().mockResolvedValue({ id: 1 } as any);
   vi.mocked(chrome.windows.getAll).mockReset().mockResolvedValue([{ id: 1, tabs: [] }] as any);
   vi.mocked(chrome.windows.create).mockReset().mockResolvedValue({ id: 2 } as any);
+  vi.mocked(chrome.contextMenus.remove).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(chrome.bookmarks.create).mockReset().mockImplementation(async (bookmark: any) => ({
     id: String(groupIdCounter++),
     ...bookmark,
@@ -84,10 +86,6 @@ export function resetAllMocks() {
 let groupIdCounter = 100;
 
 (globalThis as any).chrome = {
-  storage: {
-    local: makeStorage(localStore),
-    sync: makeStorage(syncStore),
-  },
   tabs: {
     query: vi.fn(() => Promise.resolve([])),
     group: vi.fn(() => Promise.resolve(groupIdCounter++)),
@@ -106,12 +104,17 @@ let groupIdCounter = 100;
   tabGroups: {
     query: vi.fn(() => Promise.resolve([])),
     update: vi.fn(() => Promise.resolve()),
+    onCreated: new MockEvent(),
+    onRemoved: new MockEvent(),
+    onUpdated: new MockEvent(),
   },
   windows: {
     WINDOW_ID_CURRENT: -2,
     getAll: vi.fn(() => Promise.resolve([])),
-    getCurrent: vi.fn(() => Promise.resolve({ id: -2 })),
+    getCurrent: vi.fn(() => Promise.resolve({ id: 1 })),
+    getLastFocused: vi.fn(() => Promise.resolve({ id: 1 })),
     create: vi.fn(() => Promise.resolve({ id: 2 })),
+    update: vi.fn(() => Promise.resolve()),
   },
   scripting: {
     executeScript: vi.fn(() => Promise.resolve([])),
@@ -135,7 +138,13 @@ let groupIdCounter = 100;
   },
   contextMenus: {
     create: vi.fn(),
+    remove: vi.fn(() => Promise.resolve()),
     onClicked: new MockEvent(),
+  },
+  storage: {
+    local: makeStorage(localStore),
+    sync: makeStorage(syncStore),
+    onChanged: new MockEvent(),
   },
   action: {
     setBadgeText: vi.fn(() => Promise.resolve()),

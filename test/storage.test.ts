@@ -61,6 +61,31 @@ describe('settings', () => {
     await saveSettings({ ...DEFAULT_SETTINGS, model: 'second' });
     expect((await getSettings()).model).toBe('second');
   });
+
+  it('sanitizes invalid numeric settings on save', async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      threshold: -5,
+      maxGroups: 999,
+      maxTitleLength: 1,
+      reorgTime: 99,
+      spendingCapUSD: -1,
+    });
+    const s = await getSettings();
+    expect(s.threshold).toBe(0);
+    expect(s.maxGroups).toBe(30);
+    expect(s.maxTitleLength).toBe(10);
+    expect(s.reorgTime).toBe(23);
+    expect(s.spendingCapUSD).toBe(0);
+  });
+
+  it('migrates legacy sync apiKey to local storage', async () => {
+    await chrome.storage.sync.set({ settings: { ...DEFAULT_SETTINGS, apiKey: 'legacy-key' } });
+    const s = await getSettings();
+    expect(s.apiKey).toBe('legacy-key');
+    const local = await chrome.storage.local.get('apiKeyLocal');
+    expect(local.apiKeyLocal).toBe('legacy-key');
+  });
 });
 
 // ---------- Affinity ----------

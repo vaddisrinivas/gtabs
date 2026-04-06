@@ -247,6 +247,20 @@
   }
   .cost-table td { padding: 12px 14px; color: var(--text); border-top: 1px solid var(--border); }
 
+  /* ─── Group stats ─── */
+  .group-stat-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: rgba(0,0,0,0.2);
+    border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px;
+  }
+  .group-stat-color {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  }
+  .group-stat-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); }
+  .group-stat-count { font-size: 12px; color: var(--accent); font-weight: 700; font-family: var(--font-display); min-width: 28px; text-align: right; }
+  .group-stat-domains { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  .group-stats-empty { font-size: 13px; color: var(--text-muted); text-align: center; padding: 14px 0; }
+
   .hidden { display: none !important; }
 
   @keyframes fadeUp {
@@ -289,6 +303,9 @@
     <div class="form-group hidden" id="key-row">
       <label>API Key <a id="signup-link" href="#" target="_blank" hidden>Get free key →</a></label>
       <input type="password" id="apiKey" placeholder="sk-..." />
+      <div class="slider-desc" id="provider-privacy-note" style="margin-top:6px">
+        Cloud providers receive tab titles and URLs to generate groups.
+      </div>
     </div>
     <div class="form-row" style="margin-top:14px">
       <div class="form-group">
@@ -353,6 +370,17 @@
       <input type="range" id="staleTabThresholdHours" min="1" max="168" value="48" />
     </div>
 
+    <div class="slider-group" style="margin-bottom:20px">
+      <div class="slider-header">
+        <div>
+          <div class="slider-label">Monthly Spending Cap (USD)</div>
+          <div class="slider-desc">Stops AI calls once this total estimated cost is reached (0 = unlimited)</div>
+        </div>
+        <span class="slider-val" id="spendingCapVal">0</span>
+      </div>
+      <input type="range" id="spendingCapUSD" min="0" max="100" value="0" step="1" />
+    </div>
+
     <div class="toggle-row">
       <label class="toggle-switch"><input type="checkbox" id="autoTrigger" /><span class="toggle-slider"></span></label>
       <div class="toggle-row-text">
@@ -382,6 +410,14 @@
       <div class="toggle-row-text">
         <span>Auto-pin Web Apps</span>
         <p>Pin Gmail, Calendar, Jira, Spotify and similar apps to the left automatically.</p>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <label class="toggle-switch"><input type="checkbox" id="smartUngroup" /><span class="toggle-slider"></span></label>
+      <div class="toggle-row-text">
+        <span>Smart Ungrouping</span>
+        <p>Auto-remove tabs from groups when you navigate to an unrelated domain.</p>
       </div>
     </div>
   </div>
@@ -493,7 +529,23 @@
       <span class="section-desc">Always override AI for specific domains</span>
     </div>
     <div id="domain-rules"></div>
-    <button class="btn-ghost" style="margin-top:10px;width:100%" id="add-rule">+ Add Rule</button>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn-ghost" style="flex:1" id="add-rule">+ Add Rule</button>
+      <button class="btn-ghost" id="export-rules-csv" title="Download rules as CSV">⬇ Export CSV</button>
+      <button class="btn-ghost" id="import-rules-csv" title="Import rules from CSV">⬆ Import CSV</button>
+    </div>
+    <input type="file" id="import-rules-file" accept=".csv" hidden />
+  </div>
+
+  <!-- Group Stats -->
+  <div class="section" style="animation-delay:230ms">
+    <div class="section-header">
+      <div class="section-icon">📈</div>
+      <h2>Group Statistics</h2>
+      <span class="section-desc">Current window tab groups</span>
+      <button class="btn-ghost btn-sm" id="refresh-group-stats" style="margin-left:8px">Refresh</button>
+    </div>
+    <div id="group-stats-body"><div class="group-stats-empty">Open the popup to organize tabs first</div></div>
   </div>
 
   <!-- Data -->

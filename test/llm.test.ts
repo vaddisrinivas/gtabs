@@ -17,11 +17,11 @@ describe('complete - request format', () => {
     mockOk('hello');
     await complete(cfg, [{ role: 'user', content: 'hi' }]);
 
-    expect(fetch).toHaveBeenCalledWith('https://api.test.com/v1/chat/completions', {
+    expect(fetch).toHaveBeenCalledWith('https://api.test.com/v1/chat/completions', expect.objectContaining({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer sk-test' },
       body: expect.stringContaining('"model":"test-model"'),
-    });
+    }));
   });
 
   it('sends temperature in body', async () => {
@@ -53,9 +53,8 @@ describe('complete - request format', () => {
   it('omits Authorization header when apiKey is only whitespace', async () => {
     mockOk('ok');
     await complete({ ...cfg, apiKey: '   ' }, [{ role: 'user', content: 'hi' }]);
-    // apiKey is truthy (' ') so it will be sent — this tests current behavior
     const headers = vi.mocked(fetch).mock.calls[0][1]!.headers as Record<string, string>;
-    expect(headers.Authorization).toBe('Bearer    ');
+    expect(headers.Authorization).toBeUndefined();
   });
 
   it('constructs URL from baseUrl correctly', async () => {
@@ -173,9 +172,7 @@ describe('complete - error handling', () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
       choices: [{ message: { content: null } }],
     })));
-    // null is returned — caller should handle
-    const result = await complete(cfg, [{ role: 'user', content: 'hi' }]);
-    expect(result).toBeNull();
+    await expect(complete(cfg, [{ role: 'user', content: 'hi' }])).rejects.toThrow('Empty response');
   });
 });
 

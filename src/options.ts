@@ -11,6 +11,7 @@ const modelSelect = $<HTMLSelectElement>('model-select');
 const testBtn = $<HTMLButtonElement>('test-btn');
 const signupLink = $<HTMLAnchorElement>('signup-link');
 const testResult = $<HTMLSpanElement>('test-result');
+const providerPrivacyNote = $<HTMLDivElement>('provider-privacy-note');
 const inMaxGroups = $<HTMLInputElement>('maxGroups');
 const outMaxGroups = $<HTMLSpanElement>('maxGroupsVal');
 const inMaxTitleLength = $<HTMLInputElement>('maxTitleLength');
@@ -21,8 +22,11 @@ const outThreshold = $<HTMLSpanElement>('thresholdVal');
 const inMergeMode = $<HTMLInputElement>('mergeMode');
 const inSilentAutoAdd = $<HTMLInputElement>('silentAutoAdd');
 const inAutoPinApps = $<HTMLInputElement>('autoPinApps');
+const inSmartUngroup = $<HTMLInputElement>('smartUngroup');
 const inStaleTabThresholdHours = $<HTMLInputElement>('staleTabThresholdHours');
 const outStale = $<HTMLSpanElement>('staleVal');
+const inSpendingCapUSD = $<HTMLInputElement>('spendingCapUSD');
+const outSpendingCapUSD = $<HTMLSpanElement>('spendingCapVal');
 const inEnableCorrectionTracking = $<HTMLInputElement>('enableCorrectionTracking');
 const inEnableRejectionMemory = $<HTMLInputElement>('enableRejectionMemory');
 const inEnableGroupDrift = $<HTMLInputElement>('enableGroupDrift');
@@ -37,12 +41,17 @@ const inNewPinnedGroup = $<HTMLInputElement>('new-pinned-group');
 const btnAddPinned = $<HTMLButtonElement>('add-pinned');
 const rulesContainer = $<HTMLDivElement>('domain-rules');
 const btnAddRule = $<HTMLButtonElement>('add-rule');
+const btnExportRulesCSV = $<HTMLButtonElement>('export-rules-csv');
+const btnImportRulesCSV = $<HTMLButtonElement>('import-rules-csv');
+const importRulesFile = $<HTMLInputElement>('import-rules-file');
 const btnExport = $<HTMLButtonElement>('export-data');
 const btnImport = $<HTMLButtonElement>('import-data');
 const importFile = $<HTMLInputElement>('import-file');
 const statsLine = $<HTMLDivElement>('stats-line');
 const costTable = $<HTMLTableElement>('cost-table');
 const costBody = $<HTMLTableSectionElement>('cost-body');
+const groupStatsBody = $<HTMLDivElement>('group-stats-body');
+const btnRefreshGroupStats = $<HTMLButtonElement>('refresh-group-stats');
 
 let currentProvider: ProviderPreset | null = null;
 
@@ -97,6 +106,7 @@ function selectProvider(p: ProviderPreset) {
 
   // Show/hide key row + signup link
   keyRow.classList.toggle('hidden', !p.needsKey);
+  providerPrivacyNote.hidden = p.isBuiltIn === true || p.canFetchModels === true;
   if (p.signupUrl) {
     signupLink.href = p.signupUrl;
     signupLink.hidden = false;
@@ -161,7 +171,7 @@ async function save() {
   const settings: Settings = {
     provider: p.id,
     baseUrl,
-    apiKey: inApiKey.value,
+    apiKey: inApiKey.value.trim(),
     model,
     maxGroups: Number(inMaxGroups.value) || DEFAULT_SETTINGS.maxGroups,
     maxTitleLength: Number(inMaxTitleLength.value) || DEFAULT_SETTINGS.maxTitleLength,
@@ -179,8 +189,17 @@ async function save() {
     reorgSchedule: inReorgSchedule.value as Settings['reorgSchedule'],
     reorgTime: Number(inReorgTime.value),
     pinnedGroups: current.pinnedGroups || [],
+    smartUngroup: inSmartUngroup.checked,
+    spendingCapUSD: current.spendingCapUSD ?? DEFAULT_SETTINGS.spendingCapUSD,
   };
+  settings.spendingCapUSD = Number(inSpendingCapUSD.value) ?? 0;
   await saveSettings(settings);
+}
+
+let saveDebounceTimer: number | undefined;
+function scheduleSave(delayMs = 180) {
+  if (saveDebounceTimer !== undefined) window.clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = window.setTimeout(() => { void save(); }, delayMs);
 }
 
 // --- Load ---
@@ -197,6 +216,7 @@ async function load() {
 
   renderProviderCards(p.id);
   keyRow.classList.toggle('hidden', !p.needsKey);
+  providerPrivacyNote.hidden = p.isBuiltIn === true || p.canFetchModels === true;
 
   inApiKey.value = s.apiKey;
 
@@ -225,9 +245,12 @@ async function load() {
   inMergeMode.checked = s.mergeMode;
   inSilentAutoAdd.checked = s.silentAutoAdd;
   inAutoPinApps.checked = s.autoPinApps;
+  inSmartUngroup.checked = s.smartUngroup;
   
   inStaleTabThresholdHours.value = String(s.staleTabThresholdHours);
   outStale.textContent = String(s.staleTabThresholdHours);
+  inSpendingCapUSD.value = String(s.spendingCapUSD);
+  outSpendingCapUSD.textContent = String(s.spendingCapUSD);
 
   // Smart learning
   inEnableCorrectionTracking.checked = s.enableCorrectionTracking;
@@ -297,10 +320,10 @@ async function renderDomainRules() {
   const saveRules = async () => {
     const updated: DomainRule[] = [];
     rulesContainer.querySelectorAll('.rule-row').forEach((row, i) => {
-      const domain = (row.querySelector('.rule-domain') as HTMLInputElement).value;
-      const groupName = (row.querySelector('.rule-group') as HTMLInputElement).value;
+      const domain = (row.querySelector('.rule-domain') as HTMLInputElement).value.trim().toLowerCase();
+      const groupName = (row.querySelector('.rule-group') as HTMLInputElement).value.trim();
       const color = (row.querySelector('.rule-color') as HTMLSelectElement).value as Color;
-      updated.push({ domain, groupName, color });
+      if (domain && groupName) updated.push({ domain, groupName, color });
     });
     await saveDomainRules(updated);
   };
@@ -321,6 +344,50 @@ btnAddRule.addEventListener('click', async () => {
   rules.push({ domain: '', groupName: '', color: 'grey' });
   await saveDomainRules(rules);
   renderDomainRules();
+});
+
+btnExportRulesCSV.addEventListener('click', async () => {
+  const rules = await getDomainRules();
+  const lines = ['domain,groupName,color', ...rules.map(r =>
+    [r.domain, r.groupName, r.color].map(v => `"${v.replace(/"/g, '""')}"`).join(',')
+  )];
+  const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'gtabs-domain-rules.csv';
+  a.click();
+});
+
+btnImportRulesCSV.addEventListener('click', () => importRulesFile.click());
+
+importRulesFile.addEventListener('change', async () => {
+  const file = importRulesFile.files?.[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const imported: DomainRule[] = [];
+    for (const line of lines) {
+      if (line.toLowerCase().startsWith('domain,')) continue;
+      // Parse simple CSV: handle quoted fields
+      const parts = line.split(',').map(p => p.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+      const [domain, groupName, color] = parts;
+      const normalizedDomain = domain?.trim().toLowerCase();
+      const normalizedGroup = groupName?.trim();
+      if (normalizedDomain && normalizedGroup && COLORS.includes(color as Color)) {
+        imported.push({ domain: normalizedDomain, groupName: normalizedGroup, color: color as Color });
+      }
+    }
+    if (imported.length === 0) { alert('No valid rules found in CSV'); return; }
+    const existing = await getDomainRules();
+    // Merge: overwrite existing entries for the same domain, append new ones
+    const merged = new Map(existing.map(r => [r.domain, r]));
+    for (const r of imported) merged.set(r.domain, r);
+    await saveDomainRules([...merged.values()]);
+    await renderDomainRules();
+    alert(`Imported ${imported.length} rule(s)`);
+  } catch { alert('Failed to parse CSV'); }
+  importRulesFile.value = '';
 });
 
 // --- Data ---
@@ -370,9 +437,12 @@ importFile.addEventListener('change', async () => {
   if (!file) return;
   try {
     const data = JSON.parse(await file.text());
-    await sendMsg({ type: 'import-data', data });
+    const res = await sendMsg({ type: 'import-data', data });
+    if (res?.status !== 'imported') throw new Error(res?.error || 'Import failed');
     await load();
-  } catch { alert('Invalid import file'); }
+  } catch (err) {
+    alert(err instanceof Error ? err.message : 'Invalid import file');
+  }
   importFile.value = '';
 });
 
@@ -417,6 +487,7 @@ const rangeBindings = [
   { input: inMaxTitleLength, out: outMaxTitleLength },
   { input: inThreshold, out: outThreshold },
   { input: inStaleTabThresholdHours, out: outStale },
+  { input: inSpendingCapUSD, out: outSpendingCapUSD },
   { input: inGroupDriftThreshold, out: outDriftThreshold },
   { input: inReorgTime, out: outReorgTime },
 ];
@@ -426,17 +497,48 @@ for (const b of rangeBindings) {
 
 const autoSaveElements = [
   inApiKey, modelSelect, inMaxGroups, inMaxTitleLength, inAutoTrigger, inThreshold,
-  inMergeMode, inSilentAutoAdd, inAutoPinApps, inStaleTabThresholdHours,
+  inMergeMode, inSilentAutoAdd, inAutoPinApps, inSmartUngroup, inStaleTabThresholdHours,
+  inSpendingCapUSD,
   inEnableCorrectionTracking, inEnableRejectionMemory, inEnableGroupDrift,
   inEnablePatternMining, inGroupDriftThreshold,
   inReorgSchedule, inReorgTime,
 ];
 for (const el of autoSaveElements) {
-  el.addEventListener('change', save);
+  el.addEventListener('change', () => { void save(); });
   if (el instanceof HTMLInputElement && (el.type === 'text' || el.type === 'password' || el.type === 'number' || el.type === 'range')) {
-    el.addEventListener('input', save);
+    el.addEventListener('input', () => scheduleSave());
   }
 }
 
+// --- Group Stats ---
+
+const TAB_GROUP_COLORS: Record<string, string> = {
+  grey: '#9aa0b8', blue: '#4f8bff', red: '#f28b82', yellow: '#fdd663',
+  green: '#4ade80', pink: '#f48fb1', purple: '#c5a5f5', cyan: '#67d7cc', orange: '#ffb74d',
+};
+
+async function loadGroupStats() {
+  const res = await sendMsg({ type: 'get-group-stats' });
+  groupStatsBody.innerHTML = '';
+  if (!res?.groupStats?.length) {
+    groupStatsBody.innerHTML = '<div class="group-stats-empty">No tab groups in current window</div>';
+    return;
+  }
+  for (const g of res.groupStats as Array<{ name: string; color: string; tabCount: number; domains: string[] }>) {
+    const color = TAB_GROUP_COLORS[g.color] || '#9aa0b8';
+    const row = document.createElement('div');
+    row.className = 'group-stat-row';
+    row.innerHTML = `
+      <span class="group-stat-color" style="background:${color}"></span>
+      <span class="group-stat-name">${esc(g.name)}</span>
+      <span class="group-stat-domains" title="${esc(g.domains.join(', '))}">${esc(g.domains.slice(0, 5).join(', '))}</span>
+      <span class="group-stat-count">${g.tabCount} tab${g.tabCount !== 1 ? 's' : ''}</span>`;
+    groupStatsBody.appendChild(row);
+  }
+}
+
+btnRefreshGroupStats.addEventListener('click', loadGroupStats);
+
 // --- Init ---
 load();
+loadGroupStats();

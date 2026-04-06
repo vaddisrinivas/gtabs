@@ -14,14 +14,15 @@ describe('Options Page', () => {
     vi.clearAllMocks();
     
     // Reset chrome.runtime.sendMessage
+    let testConnectionCallCount = 0;
     (chrome.runtime.sendMessage as any).mockImplementation((msg: any, cb: Function) => {
       if (msg.type === 'check-chrome-ai') cb({ available: true });
       else if (msg.type === 'fetch-ollama-models') cb({ models: ['llama2', 'mistral'] });
       else if (msg.type === 'get-stats') cb({ stats: { totalOrganizations: 10, totalTabsGrouped: 50, lastOrganizedAt: Date.now() } });
       else if (msg.type === 'get-costs') cb({ costs: { byProvider: { openai: { inputTokens: 10, outputTokens: 20, cost: 0.05 } }, totalInputTokens: 10, totalOutputTokens: 20, totalCost: 0.05 } });
       else if (msg.type === 'test-connection') {
-        if ((chrome.runtime.sendMessage as any).mock.calls.length > 5) cb({ status: 'error', error: 'Failed' });
-        else cb({ status: 'done' });
+        testConnectionCallCount += 1;
+        cb(testConnectionCallCount === 1 ? { status: 'done' } : { status: 'error', error: 'Failed' });
       }
       else if (msg.type === 'export-data') cb({ data: { test: 1 } });
       else cb({ status: 'done' });

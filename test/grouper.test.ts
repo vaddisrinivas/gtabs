@@ -280,7 +280,8 @@ describe('buildPrompt', () => {
   it('handles tabs with special characters in title', () => {
     const special: TabInfo[] = [{ id: 1, title: 'Tab "with" <special> & chars', url: 'https://example.com' }];
     const prompt = buildPrompt(special, 6, {});
-    expect(prompt).toContain('Tab "with" <special> & chars');
+    // Quotes are sanitized to prevent prompt injection
+    expect(prompt).toContain("Tab 'with' <special> & chars");
   });
 });
 
@@ -443,8 +444,9 @@ describe('suggest', () => {
   it('returns enriched suggestions from LLM', async () => {
     mockLLM('[{"name":"Dev","color":"blue","tabIds":[1,2]},{"name":"Media","color":"red","tabIds":[3]}]');
     const { suggestions: result } = await suggest(tabs, TEST_SETTINGS, {});
-    expect(result).toHaveLength(2);
+    expect(result).toHaveLength(3); // 2 LLM groups + "Other" for unassigned tab 4
     expect(result[0].tabs[0].title).toBe('GitHub - repo');
+    expect(result[2].name).toBe('Other');
   });
 
   it('passes affinity to prompt', async () => {

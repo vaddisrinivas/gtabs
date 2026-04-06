@@ -1,6 +1,6 @@
 import type { Color, GroupSuggestion, TabInfo, CorrectionEntry, RejectionEntry, MergeSplitResult } from './types';
 import { COLORS } from './types';
-import { getSuggestions, getSettings } from './storage';
+import { getSuggestions, getSettings, saveSettings } from './storage';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -13,14 +13,24 @@ const btnSettings = $<HTMLButtonElement>('open-settings');
 const btnFocusMode = $<HTMLButtonElement>('focus-mode');
 const btnSortGroups = $<HTMLButtonElement>('sort-groups');
 const btnDeleteGroups = $<HTMLButtonElement>('delete-groups');
+const btnExportMarkdown = $<HTMLButtonElement>('export-markdown');
+const btnSnoozeTab = $<HTMLButtonElement>('snooze-tab');
+const snoozePanel = $<HTMLDivElement>('snooze-panel');
+const snoozeDuration = $<HTMLSelectElement>('snooze-duration');
+const btnSnoozeConfirm = $<HTMLButtonElement>('snooze-confirm');
+const btnSnoozeCancel = $<HTMLButtonElement>('snooze-cancel');
 const status = $<HTMLDivElement>('status');
 const container = $<HTMLDivElement>('suggestions');
 const dupesContainer = $<HTMLDivElement>('duplicates');
 const dupesWrapper = $<HTMLDivElement>('duplicates-wrapper');
 const btnCloseDupes = $<HTMLButtonElement>('close-dupes');
 const searchInput = $<HTMLInputElement>('search');
+const tabSearchResults = $<HTMLDivElement>('tab-search-results');
 const statsText = $<HTMLSpanElement>('stats-text');
 const costText = $<HTMLSpanElement>('cost-text');
+const workspaceNameInput = $<HTMLInputElement>('workspace-name');
+const btnSaveWorkspace = $<HTMLButtonElement>('save-workspace');
+const workspaceList = $<HTMLDivElement>('workspace-list');
 
 let currentSuggestions: GroupSuggestion[] = [];
 let originalSuggestions: GroupSuggestion[] = [];
@@ -30,7 +40,7 @@ function clearSuggestionUi() {
   currentSuggestions = [];
   container.innerHTML = '';
   searchInput.value = '';
-  searchInput.style.display = 'none';
+  tabSearchResults.innerHTML = '';
   btnApply.hidden = true;
 }
 
@@ -97,7 +107,7 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
   currentSuggestions = suggestions;
   originalSuggestions = deepCloneSuggestions(suggestions);
   container.innerHTML = '';
-  searchInput.style.display = suggestions.length ? 'block' : 'none';
+  tabSearchResults.innerHTML = '';
 
   if (!suggestions.length) {
     btnApply.hidden = true;
@@ -149,7 +159,7 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
         pinned.add(groupName);
         setStatus(`Pinned "${groupName}" — survives re-org`);
       }
-      await sendMsg({ type: 'import-data', data: { settings: { ...settings, pinnedGroups: [...pinned] } } });
+      await saveSettings({ ...settings, pinnedGroups: [...pinned] });
     }),
   );
 
@@ -181,17 +191,106 @@ function renderSuggestions(suggestions: GroupSuggestion[]) {
   btnApply.hidden = false;
 }
 
+function renderTabSearchResults(results: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>) {
+  tabSearchResults.innerHTML = '';
+  if (!results.length) {
+    tabSearchResults.innerHTML = '<div class="tab-search-empty">No tabs found</div>';
+    return;
+  }
+  for (const tab of results.slice(0, 30)) {
+    const row = document.createElement('div');
+    row.className = 'tab-search-row';
+    row.innerHTML = `
+      <div class="tab-search-info">
+        <span class="tab-search-title">${esc(tab.title || tab.url)}</span>
+        ${tab.groupName ? `<span class="tab-search-group">${esc(tab.groupName)}</span>` : ''}
+      </div>
+      <button class="btn-ghost tab-search-switch" data-id="${tab.id}">Switch</button>`;
+    tabSearchResults.appendChild(row);
+  }
+  tabSearchResults.querySelectorAll<HTMLButtonElement>('.tab-search-switch').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const tabId = Number(btn.dataset.id);
+      await chrome.tabs.update(tabId, { active: true });
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.windowId !== undefined) await chrome.windows.update(tab.windowId, { focused: true });
+      window.close();
+    });
+  });
+}
+
+let searchTabsTimer: ReturnType<typeof setTimeout> | null = null;
+
 searchInput.addEventListener('input', () => {
   const q = searchInput.value.toLowerCase();
-  container.querySelectorAll('.tab-list li').forEach(li => {
-    const match = !q || li.textContent!.toLowerCase().includes(q) || li.getAttribute('title')!.toLowerCase().includes(q);
-    (li as HTMLElement).style.display = match ? '' : 'none';
-    li.className = q && match ? 'search-match' : '';
-  });
-  container.querySelectorAll<HTMLDivElement>('.card').forEach(card => {
-    const hasVisible = card.querySelector('.tab-list li:not([style*="display: none"])');
-    card.style.opacity = !q || hasVisible ? '1' : '0.4';
-  });
+
+  if (currentSuggestions.length > 0) {
+    // Filter suggestion cards
+    tabSearchResults.innerHTML = '';
+    container.querySelectorAll('.tab-list li').forEach(li => {
+      const match = !q || li.textContent!.toLowerCase().includes(q) || li.getAttribute('title')!.toLowerCase().includes(q);
+      (li as HTMLElement).style.display = match ? '' : 'none';
+      li.className = q && match ? 'search-match' : '';
+    });
+    container.querySelectorAll<HTMLDivElement>('.card').forEach(card => {
+      const hasVisible = card.querySelector('.tab-list li:not([style*="display: none"])');
+      card.style.opacity = !q || hasVisible ? '1' : '0.4';
+    });
+  } else {
+    // Global tab search mode
+    if (searchTabsTimer) clearTimeout(searchTabsTimer);
+    tabSearchResults.innerHTML = '';
+    if (!q) return;
+    searchTabsTimer = setTimeout(async () => {
+      const res = await sendMsg({ type: 'search-tabs', query: q });
+      if (res?.tabResults) renderTabSearchResults(res.tabResults);
+    }, 200);
+  }
+});
+
+// --- Keyboard navigation (F5) ---
+
+let focusedCardIdx = -1;
+
+function getCards(): HTMLDivElement[] {
+  return Array.from(container.querySelectorAll<HTMLDivElement>('.card'));
+}
+
+function setFocusedCard(idx: number) {
+  const cards = getCards();
+  cards.forEach((c, i) => c.classList.toggle('focused', i === idx));
+  focusedCardIdx = idx;
+  if (idx >= 0 && idx < cards.length) {
+    cards[idx].scrollIntoView({ block: 'nearest' });
+  }
+}
+
+document.addEventListener('keydown', e => {
+  const inInput = document.activeElement instanceof HTMLInputElement || document.activeElement instanceof HTMLSelectElement;
+
+  if (e.key === 'Escape') {
+    searchInput.value = '';
+    tabSearchResults.innerHTML = '';
+    container.querySelectorAll<HTMLElement>('.tab-list li').forEach(li => { li.style.display = ''; li.className = ''; });
+    container.querySelectorAll<HTMLDivElement>('.card').forEach(c => { c.style.opacity = '1'; });
+    setFocusedCard(-1);
+    (document.activeElement as HTMLElement)?.blur?.();
+    return;
+  }
+
+  if (inInput) return;
+
+  const cards = getCards();
+  if (e.key === 'ArrowDown' && cards.length) {
+    e.preventDefault();
+    setFocusedCard(Math.min(focusedCardIdx + 1, cards.length - 1));
+  } else if (e.key === 'ArrowUp' && cards.length) {
+    e.preventDefault();
+    setFocusedCard(Math.max(0, focusedCardIdx - 1));
+  } else if (e.key === 'Enter' && currentSuggestions.length > 0 && !btnApply.hidden) {
+    e.preventDefault();
+    btnApply.click();
+  }
 });
 
 function renderDuplicates(groups: TabInfo[][]) {
@@ -227,7 +326,7 @@ btnSortGroups.addEventListener('click', async () => {
   await runPowerAction(
     { type: 'sort-groups' },
     'Sorting tab groups...',
-    res => `Sorted ${res?.count || 0} groups`,
+    res => `Sorted ${res?.count ?? 0} groups`,
   );
 });
 
@@ -309,6 +408,21 @@ btnSettings.addEventListener('click', () => {
   chrome.runtime.openOptionsPage();
 });
 
+btnExportMarkdown.addEventListener('click', async () => {
+  setStatus('Exporting...');
+  const res = await sendMsg({ type: 'export-markdown' });
+  if (res?.error) {
+    setStatus(res.error, true);
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(res.markdown || '');
+    setStatus('Markdown copied to clipboard!');
+  } catch {
+    setStatus('Export failed: clipboard access denied', true);
+  }
+});
+
 async function refreshFooter() {
   const [statsRes, costsRes] = await Promise.all([
     sendMsg({ type: 'get-stats' }),
@@ -358,7 +472,7 @@ function renderMergeSplit(result: MergeSplitResult) {
     setStatus(`${pending.length} pending suggestions`);
     renderSuggestions(pending);
   }
-  await refreshFooter();
+  await Promise.all([refreshFooter(), refreshWorkspaceList()]);
 
   // Check group drift
   const settings = await getSettings();
@@ -382,4 +496,103 @@ document.getElementById('drift-refresh')?.addEventListener('click', () => {
   doOrganize(false);
   const dw = document.getElementById('drift-warning');
   if (dw) dw.hidden = true;
+});
+
+// --- Workspaces ---
+
+function formatWorkspaceTime(savedAt: number): string {
+  const diff = Date.now() - savedAt;
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return mins <= 1 ? 'just now' : `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
+async function refreshWorkspaceList() {
+  const res = await sendMsg({ type: 'list-workspaces' });
+  const names: string[] = res?.workspaceNames || [];
+  workspaceList.innerHTML = '';
+
+  if (!names.length) return;
+
+  // Fetch workspace details to show time
+  const wsData = await sendMsg({ type: 'export-data' });
+  const workspaces = wsData?.data?.workspaces || {};
+
+  for (const name of names) {
+    const ws = workspaces[name];
+    const row = document.createElement('div');
+    row.className = 'workspace-row';
+    const tabCount = ws?.tabs?.length ?? '?';
+    const timeLabel = ws?.savedAt ? formatWorkspaceTime(ws.savedAt) : '';
+    row.innerHTML = `
+      <span class="workspace-name-label" title="${esc(name)}">${esc(name)}</span>
+      <span class="workspace-time">${tabCount} tabs · ${timeLabel}</span>
+      <button class="btn-ghost ws-restore" data-name="${esc(name)}" style="padding:3px 8px;font-size:10px;">Restore</button>
+      <button class="btn-ghost danger ws-delete" data-name="${esc(name)}" style="padding:3px 6px;font-size:10px;">✕</button>`;
+    workspaceList.appendChild(row);
+  }
+
+  workspaceList.querySelectorAll<HTMLButtonElement>('.ws-restore').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.name!;
+      setStatus(`Restoring "${name}"...`);
+      const res = await sendMsg({ type: 'restore-workspace', name });
+      if (res?.error) setStatus(res.error, true);
+      else setStatus(`Restored "${name}" in new window`);
+    });
+  });
+
+  workspaceList.querySelectorAll<HTMLButtonElement>('.ws-delete').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const name = btn.dataset.name!;
+      const res = await sendMsg({ type: 'delete-workspace', name });
+      if (res?.error) { setStatus(res.error, true); return; }
+      await refreshWorkspaceList();
+    });
+  });
+}
+
+btnSaveWorkspace.addEventListener('click', async () => {
+  const name = workspaceNameInput.value.trim();
+  if (!name) { setStatus('Enter a workspace name', true); return; }
+  setStatus('Saving workspace...');
+  const res = await sendMsg({ type: 'save-workspace', name });
+  if (res?.error) {
+    setStatus(res.error, true);
+  } else {
+    workspaceNameInput.value = '';
+    setStatus(`Workspace "${name}" saved`);
+    await refreshWorkspaceList();
+  }
+});
+
+// --- Snooze ---
+
+btnSnoozeTab.addEventListener('click', () => {
+  snoozePanel.hidden = !snoozePanel.hidden;
+});
+
+btnSnoozeCancel.addEventListener('click', () => {
+  snoozePanel.hidden = true;
+});
+
+btnSnoozeConfirm.addEventListener('click', async () => {
+  const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!activeTab?.id) {
+    setStatus('No active tab to snooze', true);
+    return;
+  }
+  const delayMs = Number(snoozeDuration.value) || 86400000;
+  const wakeAt = Date.now() + delayMs;
+  setStatus('Snoozing...');
+  const res = await sendMsg({ type: 'snooze-tabs', tabIds: [activeTab.id], wakeAt });
+  snoozePanel.hidden = true;
+  if (res?.error) {
+    setStatus(res.error, true);
+  } else {
+    const label = snoozeDuration.options[snoozeDuration.selectedIndex]?.text || 'later';
+    setStatus(`Tab snoozed until ${label}`);
+  }
 });

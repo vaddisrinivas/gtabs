@@ -9,6 +9,7 @@ import type {
   WorkspaceTab,
   CorrectionEntry,
   RejectionEntry,
+  SnoozedTab,
 } from './types';
 import { MODEL_PRICING } from './types';
 import {
@@ -39,6 +40,14 @@ import {
   updateAffinity,
   updateCoOccurrence,
   updateWeightedAffinity,
+  getGroupColorPrefs,
+  saveGroupColorPref,
+  getSnoozedTabs,
+  addSnoozedTab,
+  removeSnoozedTab,
+  getWorkspaces,
+  saveWorkspace,
+  removeWorkspace,
 } from './storage';
 import { suggest, findDuplicates, inferTargetGroup, matchTabsToExistingGroups, truncateTitle } from './grouper';
 import type { ExtraHints } from './grouper';
@@ -46,6 +55,8 @@ import { completeWithUsage, fetchOllamaModels, isChromeAIAvailable, testConnecti
 
 const ALARM_NAME = 'gtabs-check';
 const REORG_ALARM_NAME = 'gtabs-reorg';
+const SNOOZE_ALARM_PREFIX = 'gtabs-snooze-';
+const CTX_ADD_TO_GROUP_ID = 'gtabs-add-to-group';
 
 // In-memory state (session-only, not persisted)
 const openerMap = new Map<number, number>();
@@ -61,7 +72,6 @@ const IMPORTANT_APP_PATTERNS = [
   'figma.com',
   'linear.app',
   'atlassian.net',
-  'jira.',
   'slack.com',
   'discord.com',
   'teams.microsoft.com',
@@ -69,11 +79,22 @@ const IMPORTANT_APP_PATTERNS = [
   'airtable.com',
   'spotify.com',
 ] as const;
+const MAX_TRACKED_TAB_RELATIONS = 5000;
 
 let autoCheckInFlight = false;
+let lastAutoCheckTime = 0;
+const AUTO_CHECK_COOLDOWN_MS = 60_000; // 60s minimum between auto-organize
+const MAX_CONTEXT_GROUP_ID = 1_000_000_000;
+
+/** Reset cooldown — exported for testing only */
+export function _resetAutoCheckCooldown() { lastAutoCheckTime = 0; }
 
 export function isTabUrlAllowed(url?: string | null): url is string {
-  return Boolean(url) && !/^(chrome|edge|about|chrome-extension):\/\//.test(url!);
+  if (!url || url.length === 0) return false;
+  // Block internal browser URLs and privacy-sensitive schemes
+  if (/^(chrome|edge|about|chrome-extension):\/\//.test(url)) return false;
+  if (/^(file|data|blob|about):/.test(url)) return false;
+  return true;
 }
 
 export function hostnameFromUrl(url: string): string {
@@ -86,11 +107,44 @@ export function hostnameFromUrl(url: string): string {
 
 export function isImportantAppUrl(url: string): boolean {
   const hostname = hostnameFromUrl(url);
-  return IMPORTANT_APP_PATTERNS.some(pattern => hostname === pattern || hostname.endsWith(`.${pattern}`) || hostname.includes(pattern));
+  return IMPORTANT_APP_PATTERNS.some(pattern =>
+    hostname === pattern || hostname.endsWith(`.${pattern}`),
+  );
 }
 
 export function isGroupedTab(tab: { groupId?: number | undefined }): tab is { groupId: number } {
   return tab.groupId !== undefined && tab.groupId !== -1;
+}
+
+async function getExistingTabIds(tabIds: number[]): Promise<number[]> {
+  const existing: number[] = [];
+  for (const id of tabIds) {
+    try {
+      const tab = await chrome.tabs.get(id);
+      if (tab?.id !== undefined) existing.push(id);
+    } catch {
+      // stale tab id - skip
+    }
+  }
+  return existing;
+}
+
+async function ungroupTabsSafe(tabIds: number[]): Promise<void> {
+  const existing = await getExistingTabIds(tabIds);
+  if (existing.length > 0) {
+    await chrome.tabs.ungroup(existing as [number, ...number[]]);
+  }
+}
+
+async function groupTabsSafe(tabIds: number[], groupId?: number, windowId?: number): Promise<number | null> {
+  const existing = await getExistingTabIds(tabIds);
+  if (existing.length === 0) return null;
+  if (groupId !== undefined) {
+    await chrome.tabs.group({ tabIds: existing as [number, ...number[]], groupId });
+    return groupId;
+  }
+  const createProperties = windowId !== undefined ? { windowId } : undefined;
+  return await chrome.tabs.group({ tabIds: existing as [number, ...number[]], createProperties }) as number;
 }
 
 function toWorkspaceTab(
@@ -110,9 +164,72 @@ function toWorkspaceTab(
 }
 
 async function getCurrentWindowId(): Promise<number> {
-  const current = await chrome.windows.getCurrent();
-  if (current.id === undefined) throw new Error('Could not determine current window');
-  return current.id;
+  let win: chrome.windows.Window | undefined;
+  try {
+    win = await chrome.windows.getCurrent();
+  } catch { /* service worker may not have a current window */ }
+  if (win?.id === undefined) {
+    try {
+      win = await chrome.windows.getLastFocused({ populate: false });
+    } catch { /* ignore */ }
+  }
+  if (win?.id === undefined) throw new Error('Could not determine current window');
+  return win.id;
+}
+
+export async function saveCurrentWorkspace(name: string): Promise<void> {
+  const windowId = await getCurrentWindowId();
+  const [tabs, groups] = await Promise.all([
+    chrome.tabs.query({ windowId }),
+    chrome.tabGroups.query({ windowId }),
+  ]);
+  const groupsById = new Map(groups.map(g => [g.id, g]));
+  const wsTabs = tabs
+    .map(t => toWorkspaceTab(t, groupsById))
+    .filter((t): t is NonNullable<typeof t> => t !== null);
+  await saveWorkspace(name, { name, savedAt: Date.now(), tabs: wsTabs });
+}
+
+export async function restoreWorkspaceByName(name: string): Promise<void> {
+  const workspaces = await getWorkspaces();
+  const ws = workspaces[name];
+  if (!ws) throw new Error(`Workspace "${name}" not found`);
+
+  const newWin = await chrome.windows.create({ focused: true });
+  if (newWin === undefined) throw new Error('Could not create window');
+  const windowId = newWin.id;
+  if (windowId === undefined) throw new Error('Could not create window');
+
+  const groupTabIds = new Map<string, { tabIds: number[]; color?: Color }>();
+
+  for (const wt of ws.tabs) {
+    const tab = await chrome.tabs.create({
+      windowId,
+      url: wt.url,
+      pinned: wt.pinned,
+      active: wt.active,
+    });
+    if (tab.id !== undefined && wt.groupName) {
+      if (!groupTabIds.has(wt.groupName)) {
+        groupTabIds.set(wt.groupName, { tabIds: [], color: wt.groupColor });
+      }
+      groupTabIds.get(wt.groupName)!.tabIds.push(tab.id);
+    }
+  }
+
+  for (const [groupName, { tabIds, color }] of groupTabIds) {
+    if (tabIds.length === 0) continue;
+    const groupId = await groupTabsSafe(tabIds, undefined, windowId);
+    if (groupId === null) continue;
+    await chrome.tabGroups.update(groupId, { title: groupName, color: color || 'grey', collapsed: false });
+  }
+
+  // Close the initial blank tab Chrome opens with new windows
+  try {
+    const blankTabs = await chrome.tabs.query({ windowId, url: 'chrome://newtab/' });
+    const blankIds = blankTabs.map(t => t.id!).filter(Boolean);
+    if (blankIds.length > 0) await chrome.tabs.remove(blankIds);
+  } catch { /* best-effort */ }
 }
 
 export function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
@@ -152,7 +269,7 @@ export async function snapshotCurrentState(): Promise<UndoSnapshot> {
 export async function restoreSnapshot(snapshot: UndoSnapshot): Promise<void> {
   if (snapshot.ungrouped.length > 0) {
     try {
-      await chrome.tabs.ungroup(snapshot.ungrouped as [number, ...number[]]);
+      await ungroupTabsSafe(snapshot.ungrouped);
     } catch (err) {
       console.error(err);
     }
@@ -166,11 +283,47 @@ export async function restoreSnapshot(snapshot: UndoSnapshot): Promise<void> {
 
   for (const [, tabIds] of byGroup) {
     try {
-      await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]] });
+      await groupTabsSafe(tabIds);
     } catch (err) {
       console.error(err);
     }
   }
+}
+
+async function rebuildAddToGroupMenus(): Promise<void> {
+  try {
+    await chrome.contextMenus.remove(CTX_ADD_TO_GROUP_ID);
+  } catch { /* not found */ }
+
+  chrome.contextMenus.create({
+    id: CTX_ADD_TO_GROUP_ID,
+    title: 'Add tab to group...',
+    contexts: ['page'],
+  });
+
+  let groups: chrome.tabGroups.TabGroup[] = [];
+  try {
+    const win = await chrome.windows.getCurrent({ populate: false });
+    if (win.id !== undefined) {
+      groups = await chrome.tabGroups.query({ windowId: win.id });
+    }
+  } catch { /* no focused window */ }
+
+  for (const group of groups) {
+    chrome.contextMenus.create({
+      id: `${CTX_ADD_TO_GROUP_ID}-${group.id}`,
+      parentId: CTX_ADD_TO_GROUP_ID,
+      title: group.title || `Group ${group.id}`,
+      contexts: ['page'],
+    });
+  }
+
+  chrome.contextMenus.create({
+    id: `${CTX_ADD_TO_GROUP_ID}-new`,
+    parentId: CTX_ADD_TO_GROUP_ID,
+    title: '+ New group',
+    contexts: ['page'],
+  });
 }
 
 export async function organize(ungroupedOnly = false): Promise<{ suggestions?: GroupSuggestion[]; error?: string }> {
@@ -202,6 +355,14 @@ export async function organize(ungroupedOnly = false): Promise<{ suggestions?: G
     }
 
     if (tabs.length < 2) return { error: 'Need at least 2 tabs to organize' };
+
+    // Check spending cap before any LLM calls
+    if (settings.spendingCapUSD > 0) {
+      const costs = await getCosts();
+      if (costs.totalCost >= settings.spendingCapUSD) {
+        return { error: `Spending cap of $${settings.spendingCapUSD.toFixed(2)} reached. Increase or disable in Settings.` };
+      }
+    }
 
     // Build extra hints from learning data
     const extraHints: ExtraHints = {};
@@ -239,9 +400,10 @@ export async function organize(ungroupedOnly = false): Promise<{ suggestions?: G
     let tabsForLLM = tabs;
     if (existingGroupNames.length > 0) {
       const { matched, remaining } = matchTabsToExistingGroups(tabs, existingGroupNames);
+      const colorPrefs = await getGroupColorPrefs();
       preMatched = Array.from(matched.entries()).map(([name, matchedTabs]) => ({
         name,
-        color: 'grey' as const,
+        color: (colorPrefs[name] ?? 'grey') as const,
         tabs: matchedTabs,
       }));
       tabsForLLM = remaining;
@@ -258,7 +420,8 @@ export async function organize(ungroupedOnly = false): Promise<{ suggestions?: G
     const historyHint = summarizeHistory(history);
     const result = tabsForLLM.length >= 2
       ? await suggest(tabsForLLM, settings, affinity, domainRules, historyHint, extraHints)
-      : { suggestions: tabsForLLM.map(t => ({ name: 'Other', color: 'grey' as const, tabs: [t] })), inputTokens: 0, outputTokens: 0 };
+      // Keep a single leftover tab ungrouped instead of forcing an "Other" group.
+      : { suggestions: [] as GroupSuggestion[], inputTokens: 0, outputTokens: 0 };
 
     const allSuggestions = [...preMatched, ...result.suggestions];
 
@@ -305,17 +468,21 @@ export async function applyGroups(suggestions: GroupSuggestion[]): Promise<void>
 
   try {
     if (allTabIds.length > 0) {
-      await chrome.tabs.ungroup(allTabIds as [number, ...number[]]);
+      await ungroupTabsSafe(allTabIds);
     }
   } catch (err) {
     console.error(err);
   }
 
+  const colorPrefs = await getGroupColorPrefs();
+
   for (const group of filteredSuggestions) {
     const tabIds = group.tabs.map(t => t.id).filter(id => !pinnedTabIds.has(id));
     if (tabIds.length === 0) continue;
-    const groupId = await chrome.tabs.group({ tabIds: tabIds as [number, ...number[]] }) as number;
-    await chrome.tabGroups.update(groupId, { title: group.name, color: group.color, collapsed: false });
+    const groupId = await groupTabsSafe(tabIds);
+    if (groupId === null) continue;
+    const color = (group.name && colorPrefs[group.name]) || group.color;
+    await chrome.tabGroups.update(groupId, { title: group.name, color, collapsed: false });
   }
 
   await updateAffinity(filteredSuggestions);
@@ -334,7 +501,7 @@ export async function undoLastGrouping(): Promise<{ error?: string }> {
     const groupedIds = currentTabs.filter(isGroupedTab).map(t => t.id).filter((id): id is number => id !== undefined);
     if (groupedIds.length) {
       try {
-        await chrome.tabs.ungroup(groupedIds as [number, ...number[]]);
+        await ungroupTabsSafe(groupedIds);
       } catch {
         // ignored
       }
@@ -362,7 +529,7 @@ export async function consolidateWindows(): Promise<number> {
   for (const win of windows) {
     if (win.id === undefined || win.id === currentWindowId) continue;
     const tabIds = (win.tabs || [])
-      .filter(tab => tab.id !== undefined && isTabUrlAllowed(tab.url))
+      .filter(tab => tab.id !== undefined && isTabUrlAllowed(tab.url) && !tab.pinned)
       .map(tab => tab.id!);
 
     if (tabIds.length === 0) continue;
@@ -388,13 +555,15 @@ export async function purgeStaleTabs(): Promise<number> {
       isTabUrlAllowed(tab.url) &&
       !tab.active &&
       !tab.pinned &&
-      Boolean(tab.lastAccessed) &&
-      (now - (tab.lastAccessed || now)) > thresholdMs,
+      tab.lastAccessed != null && tab.lastAccessed > 0 &&
+      (now - tab.lastAccessed) > thresholdMs,
     )
     .map(tab => tab.id!);
 
   if (toRemove.length) {
-    await chrome.tabs.remove(toRemove);
+    try {
+      await chrome.tabs.remove(toRemove);
+    } catch { /* some tabs may have been closed already */ }
   }
 
   return toRemove.length;
@@ -429,11 +598,11 @@ export async function sortCurrentGroupsByDomain(): Promise<number> {
   }
 
   const orderedBuckets = Array.from(buckets.values())
-    .map(bucket => bucket.sort((a, b) => (a.index || 0) - (b.index || 0)))
-    .sort((a, b) => (a[0]?.index || 0) - (b[0]?.index || 0));
+    .map(bucket => bucket.sort((a, b) => (a.index ?? 0) - (b.index ?? 0)))
+    .sort((a, b) => (a[0]?.index ?? 0) - (b[0]?.index ?? 0));
 
   for (const bucket of orderedBuckets) {
-    const startIndex = bucket[0]?.index || 0;
+    const startIndex = bucket[0]?.index ?? 0;
     const sorted = [...bucket].sort((a, b) => {
       const hostDiff = hostnameFromUrl(a.url!).localeCompare(hostnameFromUrl(b.url!));
       if (hostDiff !== 0) return hostDiff;
@@ -441,7 +610,7 @@ export async function sortCurrentGroupsByDomain(): Promise<number> {
     });
 
     for (let i = 0; i < sorted.length; i++) {
-      await chrome.tabs.move(sorted[i].id!, { index: startIndex + i });
+      try { await chrome.tabs.move(sorted[i].id!, { index: startIndex + i }); } catch { /* tab may have been closed */ }
     }
   }
 
@@ -449,19 +618,69 @@ export async function sortCurrentGroupsByDomain(): Promise<number> {
   return orderedBuckets.length;
 }
 
+export async function exportGroupsAsMarkdown(): Promise<string> {
+  const windowId = await getCurrentWindowId();
+  const groups = await chrome.tabGroups.query({ windowId });
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+
+  const lines: string[] = ['# Tab Groups', ''];
+
+  const escMd = (s: string) => s.replace(/[[\]]/g, '\\$&');
+
+  for (const group of groups) {
+    lines.push(`## ${group.title || 'Unnamed Group'}`);
+    const groupTabs = tabs.filter(t => t.groupId === group.id && isTabUrlAllowed(t.url));
+    for (const tab of groupTabs) {
+      lines.push(`- [${escMd(tab.title || tab.url || '')}](${tab.url})`);
+    }
+    lines.push('');
+  }
+
+  const ungroupedTabs = tabs.filter(t => !isGroupedTab(t) && isTabUrlAllowed(t.url));
+  if (ungroupedTabs.length) {
+    lines.push('## Ungrouped');
+    for (const tab of ungroupedTabs) {
+      lines.push(`- [${escMd(tab.title || tab.url || '')}](${tab.url})`);
+    }
+    lines.push('');
+  }
+
+  return lines.join('\n');
+}
+
 export async function deleteAllTabGroups(): Promise<number> {
   await saveSuggestions(null);
   await chrome.action.setBadgeText({ text: '' });
 
-  const tabs = await chrome.tabs.query({ currentWindow: true });
-  const groupedTabs = tabs
-    .filter(tab => tab.id !== undefined && isGroupedTab(tab));
+  const settings = await getSettings();
+  const pinnedSet = new Set(settings.pinnedGroups);
 
+  const tabs = await chrome.tabs.query({ currentWindow: true });
+  const groupedTabs = tabs.filter(tab => tab.id !== undefined && isGroupedTab(tab));
   if (!groupedTabs.length) return 0;
 
-  const tabIds = groupedTabs.map(tab => tab.id!);
-  const uniqueGroups = new Set(groupedTabs.map(tab => tab.groupId));
-  await chrome.tabs.ungroup(tabIds as [number, ...number[]]);
+  // Respect pinned groups — find which group IDs are pinned
+  const pinnedGroupIds = new Set<number>();
+  if (pinnedSet.size > 0) {
+    try {
+      const windowId = await getCurrentWindowId();
+      const groups = await chrome.tabGroups.query({ windowId });
+      for (const g of groups) {
+        if (g.title && pinnedSet.has(g.title)) pinnedGroupIds.add(g.id);
+      }
+    } catch { /* ignore */ }
+  }
+
+  const tabIds = groupedTabs
+    .filter(tab => !pinnedGroupIds.has(tab.groupId))
+    .map(tab => tab.id!);
+  const uniqueGroups = new Set(
+    groupedTabs.filter(tab => !pinnedGroupIds.has(tab.groupId)).map(tab => tab.groupId),
+  );
+
+  if (tabIds.length > 0) {
+    await ungroupTabsSafe(tabIds);
+  }
   return uniqueGroups.size;
 }
 
@@ -477,14 +696,16 @@ export async function autoPinImportantApps(windowId?: number): Promise<number> {
       isImportantAppUrl(tab.url!) &&
       !isGroupedTab(tab),
     )
-    .sort((a, b) => (a.index || 0) - (b.index || 0));
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
   let pinnedCount = 0;
   for (let i = 0; i < importantTabs.length; i++) {
     const tab = importantTabs[i];
-    if (!tab.pinned) pinnedCount++;
-    await chrome.tabs.update(tab.id!, { pinned: true });
-    await chrome.tabs.move(tab.id!, { index: i });
+    try {
+      if (!tab.pinned) pinnedCount++;
+      await chrome.tabs.update(tab.id!, { pinned: true });
+      await chrome.tabs.move(tab.id!, { index: i });
+    } catch { /* tab may have been closed during operation */ }
   }
 
   return pinnedCount;
@@ -508,7 +729,7 @@ export async function checkGroupDrift(): Promise<{ drifted: boolean; driftedGrou
     for (const tab of tabs) {
       if (!tab.url) continue;
       const domain = hostnameFromUrl(tab.url);
-      if (domain) domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+      if (domain) domainCounts[domain] = (domainCounts[domain] ?? 0) + 1;
     }
 
     const maxCount = Math.max(...Object.values(domainCounts), 0);
@@ -563,7 +784,7 @@ export async function getMergeSplitSuggestions(): Promise<MergeSplitResult> {
 
   const splits: MergeSplitResult['splits'] = [];
   for (const [name, domains] of groupDomains) {
-    const tabCount = groupTabCounts.get(name) || 0;
+    const tabCount = groupTabCounts.get(name) ?? 0;
     if (tabCount > 10 && domains.size > 5) {
       splits.push({ group: name, tabCount, domainCount: domains.size });
     }
@@ -586,7 +807,11 @@ export async function setupReorgAlarm(): Promise<void> {
   const targetHour = settings.reorgTime;
   const nextFire = new Date(now);
   nextFire.setHours(targetHour, 0, 0, 0);
-  if (nextFire <= now) nextFire.setDate(nextFire.getDate() + 1);
+  if (settings.reorgSchedule === 'weekly') {
+    if (nextFire <= now) nextFire.setDate(nextFire.getDate() + 7);
+  } else if (nextFire <= now) {
+    nextFire.setDate(nextFire.getDate() + 1);
+  }
 
   const delayInMinutes = Math.max(1, (nextFire.getTime() - now.getTime()) / 60000);
   const periodInMinutes = settings.reorgSchedule === 'daily' ? 1440 : 10080;
@@ -599,10 +824,7 @@ async function checkAutoTrigger(): Promise<void> {
   if (!settings.autoTrigger) return;
 
   const tabs = await getTabs();
-  const allTabs = await chrome.tabs.query({ currentWindow: true });
-  const groupedCount = allTabs.filter(isGroupedTab).length;
-
-  if (tabs.length - groupedCount >= settings.threshold) {
+  if (tabs.length >= settings.threshold) {
     const result = await organize(settings.mergeMode);
     if (result.suggestions?.length) {
       await applyGroups(result.suggestions);
@@ -636,33 +858,38 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
     return true;
   }
 
-
+  if (msg.type === 'consolidate-windows') {
+    consolidateWindows()
+      .then(count => sendResponse({ type: 'status', status: 'done', count }))
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
 
   if (msg.type === 'purge-stale') {
     purgeStaleTabs()
       .then(count => sendResponse({ type: 'status', status: 'done', count }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
   if (msg.type === 'focus-group') {
     focusCurrentGroup()
       .then(count => sendResponse({ type: 'status', status: 'done', count }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
   if (msg.type === 'sort-groups') {
     sortCurrentGroupsByDomain()
       .then(count => sendResponse({ type: 'status', status: 'done', count }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
   if (msg.type === 'delete-all-groups') {
     deleteAllTabGroups()
       .then(count => sendResponse({ type: 'status', status: 'done', count }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
@@ -682,7 +909,9 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
   }
 
   if (msg.type === 'import-data') {
-    importAll(msg.data).then(() => sendResponse({ type: 'status', status: 'imported' }));
+    importAll(msg.data)
+      .then(() => sendResponse({ type: 'status', status: 'imported' }))
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
@@ -690,7 +919,7 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
     getSettings()
       .then(settings => testConnection(settings))
       .then(() => sendResponse({ type: 'status', status: 'done' }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
@@ -703,7 +932,7 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
     getSettings()
       .then(settings => fetchOllamaModels(settings.baseUrl))
       .then(models => sendResponse({ type: 'status', status: 'done', models }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message, models: [] }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error), models: [] }));
     return true;
   }
 
@@ -716,7 +945,7 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
         correctedSuggestions.push({
           name: c.correctedGroup,
           color: 'grey',
-          tabs: [{ id: 0, title: '', url: `https://${c.domain}` }],
+          tabs: [{ id: -1, title: '', url: `https://${c.domain}` }],
         });
       }
       if (correctedSuggestions.length > 0) {
@@ -730,28 +959,149 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
   if (msg.type === 'record-rejections') {
     addRejections(msg.rejections)
       .then(() => sendResponse({ type: 'status', status: 'done' }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
   if (msg.type === 'check-group-drift') {
     checkGroupDrift()
       .then(result => sendResponse({ type: 'status', status: 'done', ...result }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
     return true;
   }
 
   if (msg.type === 'merge-split-suggestions') {
     getMergeSplitSuggestions()
       .then(mergeSplit => sendResponse({ type: 'status', status: 'done', mergeSplit }))
-      .catch(error => sendResponse({ type: 'status', status: 'error', error: error.message }));
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
+
+  if (msg.type === 'export-markdown') {
+    exportGroupsAsMarkdown()
+      .then(markdown => sendResponse({ type: 'status', status: 'done', markdown }))
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
+
+  if (msg.type === 'search-tabs') {
+    (async () => {
+      try {
+        const windowId = await getCurrentWindowId();
+        const groups = await chrome.tabGroups.query({ windowId });
+        const groupMap = new Map(groups.map(g => [g.id, g.title || `Group ${g.id}`]));
+        const tabs = await chrome.tabs.query({ currentWindow: true });
+        const q = (msg.query || '').toLowerCase();
+        const tabResults = tabs
+          .filter(t => t.id !== undefined && isTabUrlAllowed(t.url) && (
+            !q || (t.title || '').toLowerCase().includes(q) || (t.url || '').toLowerCase().includes(q)
+          ))
+          .map(t => ({
+            id: t.id!,
+            title: t.title || t.url || '',
+            url: t.url!,
+            groupName: isGroupedTab(t) ? (groupMap.get(t.groupId) || '') : '',
+            groupId: isGroupedTab(t) ? t.groupId : -1,
+          }));
+        sendResponse({ type: 'status', status: 'done', tabResults });
+      } catch (e) {
+        sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Search failed' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'get-group-stats') {
+    (async () => {
+      try {
+        const windowId = await getCurrentWindowId();
+        const groups = await chrome.tabGroups.query({ windowId });
+        const groupStats = [];
+        for (const group of groups) {
+          const tabs = await chrome.tabs.query({ groupId: group.id });
+          const domains = [...new Set(
+            tabs.filter(t => t.url).map(t => hostnameFromUrl(t.url!)).filter(Boolean)
+          )];
+          groupStats.push({
+            name: group.title || `Group ${group.id}`,
+            color: group.color,
+            tabCount: tabs.length,
+            domains,
+          });
+        }
+        sendResponse({ type: 'status', status: 'done', groupStats });
+      } catch (e) {
+        sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Failed' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'snooze-tabs') {
+    (async () => {
+      try {
+        let count = 0;
+        for (const tabId of msg.tabIds) {
+          try {
+            const tab = await chrome.tabs.get(tabId);
+            if (!tab.url || !isTabUrlAllowed(tab.url)) continue;
+            const snoozeId = `${Date.now()}-${tabId}`;
+            const entry: SnoozedTab = {
+              id: snoozeId,
+              url: tab.url,
+              title: tab.title || tab.url,
+              wakeAt: msg.wakeAt,
+            };
+            await addSnoozedTab(entry);
+            const delayMs = Math.max(60000, msg.wakeAt - Date.now());
+            chrome.alarms.create(`${SNOOZE_ALARM_PREFIX}${snoozeId}`, { delayInMinutes: delayMs / 60000 });
+            await chrome.tabs.remove(tabId);
+            count++;
+          } catch { /* skip tabs that no longer exist */ }
+        }
+        sendResponse({ type: 'status', status: 'done', count });
+      } catch (e) {
+        sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Snooze failed' });
+      }
+    })();
+    return true;
+  }
+
+  if (msg.type === 'list-workspaces') {
+    getWorkspaces()
+      .then(ws => sendResponse({ type: 'status', status: 'done', workspaceNames: Object.keys(ws) }))
+      .catch(e => sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Failed' }));
+    return true;
+  }
+
+  if (msg.type === 'save-workspace') {
+    saveCurrentWorkspace(msg.name)
+      .then(() => sendResponse({ type: 'status', status: 'done' }))
+      .catch(e => sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Failed' }));
+    return true;
+  }
+
+  if (msg.type === 'restore-workspace') {
+    restoreWorkspaceByName(msg.name)
+      .then(() => sendResponse({ type: 'status', status: 'done' }))
+      .catch(e => sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Failed' }));
+    return true;
+  }
+
+  if (msg.type === 'delete-workspace') {
+    removeWorkspace(msg.name)
+      .then(() => sendResponse({ type: 'status', status: 'done' }))
+      .catch(e => sendResponse({ type: 'status', status: 'error', error: e instanceof Error ? e.message : 'Failed' }));
     return true;
   }
 });
 
+let commandInFlight = false;
 chrome.commands?.onCommand?.addListener((command: string) => {
-  if (command === 'organize-tabs') organize();
-  if (command === 'undo-grouping') undoLastGrouping();
+  if (commandInFlight) return;
+  commandInFlight = true;
+  const p = command === 'organize-tabs' ? organize() : command === 'undo-grouping' ? undoLastGrouping() : null;
+  (p || Promise.resolve()).finally(() => { commandInFlight = false; });
 });
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -761,17 +1111,43 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus?.create({ id: 'gtabs-organize-ungrouped', title: 'Organize ungrouped tabs only', contexts: ['action'] });
   chrome.contextMenus?.create({ id: 'gtabs-undo', title: 'Undo last grouping', contexts: ['action'] });
   chrome.contextMenus?.create({ id: 'gtabs-duplicates', title: 'Find duplicate tabs', contexts: ['action'] });
+  rebuildAddToGroupMenus();
 });
 
 chrome.contextMenus?.onClicked?.addListener((info) => {
-  if (info.menuItemId === 'gtabs-organize') organize();
-  if (info.menuItemId === 'gtabs-organize-ungrouped') organize(true);
-  if (info.menuItemId === 'gtabs-undo') undoLastGrouping();
-  if (info.menuItemId === 'gtabs-duplicates') findDuplicateTabs();
+  if (info.menuItemId === 'gtabs-organize') void organize().catch(() => {});
+  if (info.menuItemId === 'gtabs-organize-ungrouped') void organize(true).catch(() => {});
+  if (info.menuItemId === 'gtabs-undo') void undoLastGrouping().catch(() => {});
+  if (info.menuItemId === 'gtabs-duplicates') void findDuplicateTabs().catch(() => {});
+
+  const menuId = String(info.menuItemId);
+  if (menuId === `${CTX_ADD_TO_GROUP_ID}-new` && info.tab?.id !== undefined) {
+    const tabId = info.tab.id;
+    (async () => {
+      const newGroupId = await groupTabsSafe([tabId]);
+      if (newGroupId === null) return;
+      await chrome.tabGroups.update(newGroupId, { title: 'New Group', collapsed: false });
+      await rebuildAddToGroupMenus();
+    })();
+  } else if (menuId.startsWith(`${CTX_ADD_TO_GROUP_ID}-`) && info.tab?.id !== undefined) {
+    const groupId = Number(menuId.slice(CTX_ADD_TO_GROUP_ID.length + 1));
+    if (Number.isInteger(groupId) && groupId > 0 && groupId < MAX_CONTEXT_GROUP_ID) {
+      void groupTabsSafe([info.tab.id], groupId);
+    }
+  }
+});
+
+chrome.tabGroups?.onCreated?.addListener(() => rebuildAddToGroupMenus());
+chrome.tabGroups?.onRemoved?.addListener(() => rebuildAddToGroupMenus());
+chrome.tabGroups?.onUpdated?.addListener((group) => {
+  rebuildAddToGroupMenus();
+  if (group.title && group.color) {
+    saveGroupColorPref(group.title, group.color as Color).catch(() => {});
+  }
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === ALARM_NAME) checkAutoTrigger();
+  if (alarm.name === ALARM_NAME) triggerAutoCheck();
   if (alarm.name === REORG_ALARM_NAME) {
     getSettings().then(settings => {
       if (settings.reorgSchedule !== 'off') {
@@ -781,12 +1157,32 @@ chrome.alarms.onAlarm.addListener(alarm => {
       }
     });
   }
+  if (alarm.name.startsWith(SNOOZE_ALARM_PREFIX)) {
+    const snoozeId = alarm.name.slice(SNOOZE_ALARM_PREFIX.length);
+    getSnoozedTabs().then(async (tabs) => {
+      const entry = tabs.find(t => t.id === snoozeId);
+      if (entry) {
+        let windowId: number | undefined;
+        try {
+          const win = await chrome.windows.getLastFocused({ populate: false });
+          if (win.id !== undefined) windowId = win.id;
+        } catch {
+          // best-effort fallback to Chrome default window selection
+        }
+        await chrome.tabs.create({ url: entry.url, active: false, ...(windowId !== undefined ? { windowId } : {}) });
+        await removeSnoozedTab(snoozeId);
+      }
+    }).catch(() => {});
+  }
 });
 
 function triggerAutoCheck() {
   if (autoCheckInFlight) return;
+  const now = Date.now();
+  if (now - lastAutoCheckTime < AUTO_CHECK_COOLDOWN_MS) return;
 
   autoCheckInFlight = true;
+  lastAutoCheckTime = now;
   checkAutoTrigger()
     .catch(() => {
       // Keep auto-trigger best-effort and never break the event loop on runtime failures.
@@ -800,28 +1196,34 @@ chrome.tabs.onCreated?.addListener((tab: chrome.tabs.Tab) => {
   // Track opener relationship
   if (tab?.id !== undefined && tab?.openerTabId !== undefined) {
     openerMap.set(tab.id, tab.openerTabId);
+    if (openerMap.size > MAX_TRACKED_TAB_RELATIONS) {
+      const oldest = openerMap.keys().next().value;
+      if (oldest !== undefined) openerMap.delete(oldest);
+    }
   }
   triggerAutoCheck();
 });
 
 chrome.tabs.onRemoved?.addListener((tabId: number) => {
-  // Clean up in-memory maps
+  // Clean up in-memory maps — no auto-check needed on removal
   if (tabId !== undefined) {
     openerMap.delete(tabId);
     tabActivationTimes.delete(tabId);
   }
-  triggerAutoCheck();
 });
 
 chrome.tabs.onActivated?.addListener((activeInfo: { tabId: number }) => {
   if (activeInfo?.tabId !== undefined) {
     tabActivationTimes.set(activeInfo.tabId, Date.now());
+    if (tabActivationTimes.size > MAX_TRACKED_TAB_RELATIONS) {
+      const oldest = tabActivationTimes.keys().next().value;
+      if (oldest !== undefined) tabActivationTimes.delete(oldest);
+    }
   }
 });
 
 chrome.storage?.onChanged?.addListener((changes, areaName) => {
   if (areaName === 'sync' && changes.settings) {
-    triggerAutoCheck();
     setupReorgAlarm();
   }
 });
@@ -832,7 +1234,35 @@ chrome.tabs.onUpdated?.addListener(async (tabId, changeInfo, tab) => {
 
   triggerAutoCheck();
 
-  if (isGroupedTab(tab)) return;
+  if (isGroupedTab(tab)) {
+    const settings = await getSettings();
+    if (settings.smartUngroup) {
+      try {
+        const groupTabs = await chrome.tabs.query({ groupId: tab.groupId, windowId: tab.windowId });
+        const otherTabs = groupTabs.filter(t => t.id !== tabId && isTabUrlAllowed(t.url));
+        const newDomain = hostnameFromUrl(tab.url);
+        if (otherTabs.length > 0 && newDomain) {
+          const groupDomains = otherTabs.map(t => hostnameFromUrl(t.url!)).filter(Boolean);
+          // Handle ccTLDs like .co.uk, .com.au: if TLD is 2 chars and SLD is known, use 3 parts
+          const SECONDARY_TLDS = new Set(['co', 'com', 'org', 'net', 'gov', 'edu', 'ac', 'me', 'ltd']);
+          const baseDomain = (d: string) => {
+            const parts = d.split('.');
+            if (parts.length >= 3) {
+              const tld = parts[parts.length - 1];
+              const sld = parts[parts.length - 2];
+              if (tld.length === 2 && SECONDARY_TLDS.has(sld)) return parts.slice(-3).join('.');
+            }
+            return parts.slice(-2).join('.');
+          };
+          const isRelated = groupDomains.some(d => baseDomain(d) === baseDomain(newDomain));
+          if (!isRelated) {
+            await ungroupTabsSafe([tabId]);
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    return;
+  }
 
   const settings = await getSettings();
   if (!settings.silentAutoAdd) return;
@@ -843,7 +1273,7 @@ chrome.tabs.onUpdated?.addListener(async (tabId, changeInfo, tab) => {
     try {
       const openerTab = await chrome.tabs.get(openerId);
       if (isGroupedTab(openerTab) && openerTab.windowId === tab.windowId) {
-        await chrome.tabs.group({ tabIds: [tabId], groupId: openerTab.groupId });
+        await groupTabsSafe([tabId], openerTab.groupId);
         return;
       }
     } catch { /* opener may have been closed */ }
@@ -859,9 +1289,10 @@ chrome.tabs.onUpdated?.addListener(async (tabId, changeInfo, tab) => {
   try {
     const groups = await chrome.tabGroups.query({ windowId: tab.windowId, title: inferred.name });
     if (groups.length > 0) {
-      await chrome.tabs.group({ tabIds: [tabId], groupId: groups[0].id });
+      await groupTabsSafe([tabId], groups[0].id);
     } else {
-      const newGroupId = await chrome.tabs.group({ tabIds: [tabId] }) as number;
+      const newGroupId = await groupTabsSafe([tabId]);
+      if (newGroupId === null) return;
       await chrome.tabGroups.update(newGroupId, {
         title: inferred.name,
         color: inferred.color || 'grey',

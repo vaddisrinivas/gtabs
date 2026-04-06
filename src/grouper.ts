@@ -107,6 +107,16 @@ export interface ExtraHints {
   openers?: string;
 }
 
+/** Strip characters that could break JSON or inject prompt instructions */
+function sanitizeForPrompt(text: string): string {
+  return text
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/["`]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function buildPrompt(
   tabs: TabInfo[],
   maxGroups: number,
@@ -116,7 +126,7 @@ export function buildPrompt(
   extraHints?: ExtraHints,
 ): string {
   const tabList = tabs.map(t =>
-    `  - id: ${t.id} | "${truncateTitle(t.title, maxTitleLength)}" | ${t.url}`
+    `  - id: ${t.id} | "${sanitizeForPrompt(truncateTitle(t.title, maxTitleLength))}" | ${sanitizeForPrompt(t.url)}`
   ).join('\n');
 
   // Use weighted affinity hint if available, otherwise fall back to flat
@@ -206,20 +216,32 @@ export function matchTabsToExistingGroups(
   return { matched, remaining };
 }
 
+function extractJSON(raw: string): string {
+  // Try code block first
+  const codeBlock = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (codeBlock) return codeBlock[1].trim();
+
+  // Try raw array
+  const arrayMatch = raw.match(/\[[\s\S]*\]/);
+  if (arrayMatch) return arrayMatch[0];
+
+  return raw;
+}
+
+function validateGroup(g: unknown): g is RawGroup {
+  if (typeof g !== 'object' || g === null) return false;
+  const obj = g as Record<string, unknown>;
+  if (!Array.isArray(obj.tabIds)) return false;
+  return true;
+}
+
 export function parseResponse(raw: string, tabs: TabInfo[]): GroupSuggestion[] {
   const validIds = new Set(tabs.map(t => t.id));
   const tabMap = new Map(tabs.map(t => [t.id, t]));
 
-  let json = raw;
-  const codeBlock = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (codeBlock) {
-    json = codeBlock[1].trim();
-  } else {
-    const arrayMatch = raw.match(/\[[\s\S]*\]/);
-    if (arrayMatch) json = arrayMatch[0];
-  }
+  const json = extractJSON(raw);
 
-  let parsed: RawGroup[];
+  let parsed: unknown;
   try {
     parsed = JSON.parse(json);
   } catch (err) {
@@ -228,13 +250,61 @@ export function parseResponse(raw: string, tabs: TabInfo[]): GroupSuggestion[] {
 
   if (!Array.isArray(parsed)) throw new Error('Response is not an array');
 
-  return parsed
-    .map(g => ({
-      name: String(g.name || 'Unnamed'),
-      color: (COLORS.includes(g.color as Color) ? g.color : 'grey') as Color,
-      tabs: (g.tabIds || []).filter((id: number) => validIds.has(id)).map((id: number) => tabMap.get(id)!),
-    }))
+  const assignedIds = new Set<number>();
+
+  const groups = parsed
+    .filter(validateGroup)
+    .map(g => {
+      const name = String(g.name || 'Unnamed').slice(0, 50);
+      const color = (COLORS.includes(g.color as Color) ? g.color : 'grey') as Color;
+      const tabIds = g.tabIds
+        .map((id: unknown) => typeof id === 'number' ? id : Number(id))
+        .filter((id: number) => !isNaN(id) && validIds.has(id) && !assignedIds.has(id));
+      for (const id of tabIds) assignedIds.add(id);
+      return { name, color, tabs: tabIds.map((id: number) => tabMap.get(id)!) };
+    })
     .filter(g => g.tabs.length > 0);
+
+  return groups;
+}
+
+/** Collect any tabs the LLM forgot into an "Other" group */
+export function collectUnassigned(groups: GroupSuggestion[], allTabs: TabInfo[]): GroupSuggestion[] {
+  const assignedIds = new Set(groups.flatMap(g => g.tabs.map(t => t.id)));
+  const missing = allTabs.filter(t => !assignedIds.has(t.id));
+  if (missing.length > 0) {
+    return [...groups, { name: 'Other', color: 'grey' as Color, tabs: missing }];
+  }
+  return groups;
+}
+
+const CHUNK_SIZE = 60;
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function mergeSuggestions(chunks: GroupSuggestion[][]): GroupSuggestion[] {
+  const byName = new Map<string, GroupSuggestion>();
+  const globalAssignedIds = new Set<number>();
+  for (const suggestions of chunks) {
+    for (const g of suggestions) {
+      const key = g.name.toLowerCase();
+      // Deduplicate tabs that were assigned across multiple chunks
+      const newTabs = g.tabs.filter(t => !globalAssignedIds.has(t.id));
+      for (const t of newTabs) globalAssignedIds.add(t.id);
+      if (byName.has(key)) {
+        byName.get(key)!.tabs.push(...newTabs);
+      } else {
+        byName.set(key, { ...g, tabs: newTabs });
+      }
+    }
+  }
+  return Array.from(byName.values()).filter(g => g.tabs.length > 0);
 }
 
 export async function suggest(
@@ -250,16 +320,29 @@ export async function suggest(
   if (remaining.length === 0) return { suggestions: matched, inputTokens: 0, outputTokens: 0 };
 
   const remainingGroups = Math.max(1, settings.maxGroups - matched.length);
-  const prompt = buildPrompt(remaining, remainingGroups, affinity, settings.maxTitleLength, historyHint, extraHints);
-  const result = await completeWithUsage(settings, [
-    { role: 'system', content: 'You are a browser tab organizer. Return only valid JSON.' },
-    { role: 'user', content: prompt },
-  ]);
-  const llmSuggestions = parseResponse(result.content, remaining);
+  const chunks = chunkArray(remaining, CHUNK_SIZE);
+
+  let totalInput = 0;
+  let totalOutput = 0;
+  const chunkResults: GroupSuggestion[][] = [];
+
+  for (const chunk of chunks) {
+    const prompt = buildPrompt(chunk, remainingGroups, affinity, settings.maxTitleLength, historyHint, extraHints);
+    const result = await completeWithUsage(settings, [
+      { role: 'system', content: 'You are a browser tab organizer. Return only valid JSON.' },
+      { role: 'user', content: prompt },
+    ]);
+    chunkResults.push(parseResponse(result.content, chunk));
+    totalInput += result.inputTokens;
+    totalOutput += result.outputTokens;
+  }
+
+  const merged = chunks.length > 1 ? mergeSuggestions(chunkResults) : chunkResults[0];
+  const llmSuggestions = collectUnassigned(merged, remaining);
 
   return {
     suggestions: [...matched, ...llmSuggestions],
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens
+    inputTokens: totalInput,
+    outputTokens: totalOutput,
   };
 }
