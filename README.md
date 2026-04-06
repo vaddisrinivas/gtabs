@@ -12,10 +12,7 @@
 
   [Star on GitHub](https://github.com/vaddisrinivas/gtabs) · [Install](https://github.com/vaddisrinivas/gtabs/releases) · [Report Issue](https://github.com/vaddisrinivas/gtabs/issues)
 
-  <br/>
-
-  [![Featured in 10+ Awesome Lists](https://img.shields.io/badge/Featured-10%2B%20Awesome%20Lists-blue?style=flat-square)](https://github.com/vaddisrinivas/gtabs#featured-in)
-  [![Chrome Web Store](https://img.shields.io/badge/Chrome-Web%20Store-yellow?style=flat-square)](https://chromewebstore.google.com/detail/gtabs)
+  [![✅ Merged — xyNNN/awesome-chrome](https://img.shields.io/badge/%E2%9C%85%20Merged-xyNNN%2Fawesome--chrome-green?style=flat-square)](https://github.com/xyNNN/awesome-chrome)
 
   <br/>
 </div>
