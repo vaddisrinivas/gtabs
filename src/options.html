@@ -174,6 +174,41 @@
   .sub-label span { font-weight: 400; color: var(--text-dim); }
   .hidden { display: none !important; }
 
+  /* ─── Chrome AI setup guide ─── */
+  .chrome-ai-setup {
+    margin-top: 14px; padding: 18px 20px;
+    background: rgba(66,133,244,0.07); border: 1px solid rgba(66,133,244,0.25);
+    border-radius: 12px;
+  }
+  .chrome-ai-setup h3 {
+    font-size: 13px; font-weight: 700; color: #74aeff; margin-bottom: 14px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .setup-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+  .setup-step { display: flex; gap: 12px; align-items: flex-start; }
+  .step-num {
+    font-size: 11px; font-weight: 800; color: #fff;
+    background: rgba(66,133,244,0.5); border-radius: 50%;
+    width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .step-body { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  .step-body strong { color: var(--text); }
+  .flag-row {
+    display: flex; align-items: center; gap: 8px; margin-top: 6px;
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px;
+  }
+  .flag-row code { font-size: 11px; color: #74aeff; flex: 1; font-family: monospace; user-select: all; }
+  .copy-btn {
+    font-size: 10px; font-weight: 700; padding: 3px 9px;
+    background: transparent; border: 1px solid rgba(116,174,255,0.3);
+    color: #74aeff; border-radius: 5px; cursor: pointer; white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: rgba(66,133,244,0.15); }
+  .setup-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
@@ -201,6 +236,42 @@
     <div class="section">
       <div class="section-header"><div class="section-icon">🤖</div><h2>LLM Provider</h2></div>
       <div class="provider-grid" id="provider-grid"></div>
+
+      <!-- Chrome AI setup guide — shown when chrome-ai selected but unavailable -->
+      <div class="chrome-ai-setup hidden" id="chrome-ai-setup">
+        <h3>⚡ Enable Chrome Built-in AI (Gemini Nano)</h3>
+        <div class="setup-steps">
+          <div class="setup-step">
+            <span class="step-num">1</span>
+            <div class="step-body">
+              Paste this into Chrome's address bar and set to <strong>Enabled</strong>:
+              <div class="flag-row">
+                <code>chrome://flags/#prompt-api-for-gemini-nano</code>
+                <button class="copy-btn" data-copy="chrome://flags/#prompt-api-for-gemini-nano">Copy</button>
+              </div>
+            </div>
+          </div>
+          <div class="setup-step">
+            <span class="step-num">2</span>
+            <div class="step-body">
+              Paste this and set to <strong>Enabled BypassPerfRequirement</strong>:
+              <div class="flag-row">
+                <code>chrome://flags/#optimization-guide-on-device-model</code>
+                <button class="copy-btn" data-copy="chrome://flags/#optimization-guide-on-device-model">Copy</button>
+              </div>
+            </div>
+          </div>
+          <div class="setup-step">
+            <span class="step-num">3</span>
+            <div class="step-body"><strong>Relaunch Chrome</strong>, then click <strong>Check again</strong> below. The Gemini model downloads automatically (~1 GB) in the background.</div>
+          </div>
+        </div>
+        <div class="setup-actions">
+          <button class="btn btn-sm" id="chrome-ai-check-btn">Check again</button>
+          <button class="btn-ghost btn-sm" id="chrome-ai-skip-btn">Use Groq instead</button>
+        </div>
+      </div>
+
       <div class="form-group hidden" id="key-row">
         <label>API Key <a id="signup-link" href="#" target="_blank" hidden>Get free key →</a></label>
         <input type="password" id="apiKey" placeholder="sk-..." />

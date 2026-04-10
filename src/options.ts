@@ -103,11 +103,20 @@ function renderProviderCards(selectedId: string) {
     }
 
     card.addEventListener('click', () => {
-      if (p.isBuiltIn && !chromeAIAvailable) return;
+      if (p.isBuiltIn && !chromeAIAvailable) { showChromeAISetup(); return; }
+      hideChromeAISetup();
       selectProvider(p);
     });
     providerGrid.appendChild(card);
   }
+}
+
+function showChromeAISetup() {
+  document.getElementById('chrome-ai-setup')?.classList.remove('hidden');
+}
+
+function hideChromeAISetup() {
+  document.getElementById('chrome-ai-setup')?.classList.add('hidden');
 }
 
 function selectProvider(p: ProviderPreset) {
@@ -226,6 +235,7 @@ async function load() {
   currentProvider = p;
 
   renderProviderCards(p.id);
+  if (p.isBuiltIn && !chromeAIAvailable) showChromeAISetup();
   keyRow.classList.toggle('hidden', !p.needsKey);
 
   inApiKey.value = s.apiKey;
@@ -644,6 +654,38 @@ $<HTMLButtonElement>('tool-workspace-save').addEventListener('click', async () =
   input.value = '';
   setToolStatus(`Workspace "${name}" saved`);
   await refreshToolWorkspaces();
+});
+
+// --- Chrome AI setup buttons ---
+
+document.querySelectorAll<HTMLButtonElement>('.copy-btn[data-copy]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    void navigator.clipboard.writeText(btn.dataset.copy!);
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  });
+});
+
+document.getElementById('chrome-ai-check-btn')?.addEventListener('click', async () => {
+  const btn = document.getElementById('chrome-ai-check-btn') as HTMLButtonElement;
+  btn.textContent = 'Checking…';
+  btn.disabled = true;
+  chromeAIAvailable = await checkChromeAI();
+  if (chromeAIAvailable) {
+    hideChromeAISetup();
+    const p = PROVIDERS.find(pr => pr.id === 'chrome-ai')!;
+    selectProvider(p);
+  } else {
+    btn.textContent = 'Not detected — restart Chrome and try again';
+    setTimeout(() => { btn.textContent = 'Check again'; btn.disabled = false; }, 3000);
+  }
+});
+
+document.getElementById('chrome-ai-skip-btn')?.addEventListener('click', () => {
+  hideChromeAISetup();
+  const groq = PROVIDERS.find(p => p.id === 'groq')!;
+  selectProvider(groq);
 });
 
 // --- Init ---

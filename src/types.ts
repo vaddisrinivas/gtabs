@@ -20,7 +20,7 @@ export interface ProviderPreset {
 }
 
 export const PROVIDERS: ProviderPreset[] = [
-  { id: 'chrome-ai', name: 'Chrome Built-in AI', baseUrl: '', models: ['gemini-nano'], needsKey: false, isBuiltIn: true, helpText: 'Requires Chrome origin trial. No API key needed.' },
+  { id: 'chrome-ai', name: 'Chrome Built-in AI', baseUrl: '', models: ['gemini-nano'], needsKey: false, isBuiltIn: true, helpText: 'Free. Runs on-device in Chrome. Two flags to enable — click for setup guide.' },
   { id: 'openrouter-free', name: 'OpenRouter (Free)', baseUrl: 'https://openrouter.ai/api/v1', signupUrl: 'https://openrouter.ai/keys', helpText: 'Free, no credit card. Sign up \u2192 copy key.', models: [
     'openrouter/free',
     'google/gemini-2.5-flash',
@@ -261,10 +261,10 @@ export interface ExportData {
 // --- Defaults ---
 
 export const DEFAULT_SETTINGS: Settings = {
-  provider: 'groq',
-  baseUrl: 'https://api.groq.com/openai/v1',
+  provider: 'chrome-ai',
+  baseUrl: '',
   apiKey: '',
-  model: 'llama-3.3-70b-versatile',
+  model: 'gemini-nano',
   autoTrigger: false,
   threshold: 5,
   maxGroups: 6,

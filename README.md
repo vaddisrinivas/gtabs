@@ -17,11 +17,11 @@
   <br/>
 </div>
 
-![gTabs demo](store-assets/demo-v04.gif)
+![gTabs demo](store-assets/demo-v05.gif)
 
 ---
 
-## What's New in v0.4
+## What's New in v0.5
 
 **Smart Learning** — gTabs now learns from every interaction. Corrections you make before applying count 3x. Groups you remove are remembered and avoided. Domain affinity is weighted by frequency and recency with a 14-day decay half-life.
 
@@ -95,9 +95,43 @@
 | **Grok (xAI)** | $25 free credit | [Get key](https://console.x.ai) |
 | **OpenRouter** | Free models available | [Get key](https://openrouter.ai/keys) |
 | **Ollama** | Free (local) | [Install](https://ollama.com/download) — no key needed |
-| **Chrome AI** | Free (local) | Requires Chrome origin trial |
+| **Chrome AI** | Free (local) | [Setup guide below](#chrome-ai-gemini-nano-setup) — two flags, no account |
 | **Anthropic** | Paid | [Get key](https://console.anthropic.com/settings/keys) |
 | **OpenAI** | Paid | [Get key](https://platform.openai.com/api-keys) |
+
+---
+
+## Chrome AI (Gemini Nano) Setup
+
+Chrome AI runs Gemini Nano directly inside Chrome — no API key, no account, no cost, no data leaving your machine. It is the default provider in gTabs.
+
+### Requirements
+
+- Chrome 127 or later (stable, beta, or canary)
+- Two flags enabled
+
+### Steps
+
+1. Paste the following URL into Chrome's address bar and set the flag to **Enabled**:
+   ```
+   chrome://flags/#prompt-api-for-gemini-nano
+   ```
+
+2. Paste this URL and set to **Enabled BypassPerfRequirement**:
+   ```
+   chrome://flags/#optimization-guide-on-device-model
+   ```
+   > The BypassPerfRequirement variant allows model download on any hardware. Without it, Chrome may skip the download on lower-spec machines.
+
+3. Click **Relaunch** at the bottom of the flags page.
+
+4. Open gTabs Settings → Provider tab → click **Check again**. Once detected, the Chrome AI card will show **FREE** and become selectable.
+
+> **Note:** The Gemini Nano model (~1 GB) downloads automatically in the background after you enable the flags. The first organization may be slower while the model loads. Subsequent runs are instant.
+
+### Fallback
+
+If Chrome AI is not available (older Chrome, unsupported OS, or flags not set), gTabs will show a setup guide directly in the settings page with copy buttons for each flag URL. You can also click **Use Groq instead** to switch to Groq's free API in one click.
 
 ---
 
