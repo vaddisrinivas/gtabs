@@ -494,7 +494,7 @@ describe('event listeners', () => {
     vi.useFakeTimers();
     _resetAutoCheckCooldown();
     vi.mocked(chrome.tabs.query).mockResolvedValue([]);
-    await saveSettings({ ...DEFAULT_SETTINGS, autoTrigger: true, threshold: 0, silentAutoAdd: true });
+    await saveSettings({ ...DEFAULT_SETTINGS, provider: 'groq', baseUrl: 'https://api.groq.com/openai/v1', model: 'llama-3.3-70b-versatile', apiKey: 'test-key', autoTrigger: true, threshold: 0, silentAutoAdd: true });
   });
 
   afterEach(() => {
