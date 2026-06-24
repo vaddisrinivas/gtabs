@@ -99,6 +99,8 @@ export interface Settings extends LLMConfig {
   mergeMode: boolean;
   maxTitleLength: number;
   silentAutoAdd: boolean;
+  enableTabCouncilIntegration: boolean;
+  tabCouncilExtensionId: string;
   autoPinApps: boolean;
   staleTabThresholdHours: number;
   // Smart learning
@@ -271,6 +273,8 @@ export const DEFAULT_SETTINGS: Settings = {
   mergeMode: false,
   maxTitleLength: 80,
   silentAutoAdd: false,
+  enableTabCouncilIntegration: false,
+  tabCouncilExtensionId: '',
   autoPinApps: false,
   staleTabThresholdHours: 48,
   enableCorrectionTracking: true,
@@ -322,6 +326,7 @@ export type MessageType =
   | { type: 'delete-all-groups' }
   | { type: 'export-markdown' }
   | { type: 'sort-groups' }
+  | { type: 'prepare-tab-council' }
   | { type: 'save-workspace'; name: string }
   | { type: 'restore-workspace'; name: string }
   | { type: 'delete-workspace'; name: string }
@@ -331,7 +336,7 @@ export type MessageType =
   | { type: 'merge-split-suggestions' }
   | { type: 'search-tabs'; query: string }
   | { type: 'get-group-stats' }
-  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult; tabResults?: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>; groupStats?: Array<{ name: string; color: Color; tabCount: number; domains: string[] }> };
+  | { type: 'status'; status: string; suggestions?: GroupSuggestion[]; error?: string; duplicates?: TabInfo[][]; stats?: Stats; costs?: CostTotals; data?: ExportData; models?: string[]; chatResponse?: string; markdown?: string; workspaceNames?: string[]; count?: number; groupId?: number; providerCount?: number; tabCouncilApiStatus?: string; drifted?: boolean; driftedGroups?: string[]; mergeSplit?: MergeSplitResult; tabResults?: Array<{ id: number; title: string; url: string; groupName: string; groupId: number }>; groupStats?: Array<{ name: string; color: Color; tabCount: number; domains: string[] }> };
 
 declare global {
   var LanguageModel: {

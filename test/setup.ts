@@ -89,6 +89,7 @@ export function resetAllMocks() {
   }) as any);
   vi.mocked(chrome.action.setBadgeText).mockReset().mockResolvedValue(undefined);
   vi.mocked(chrome.action.setBadgeBackgroundColor).mockReset().mockResolvedValue(undefined);
+  vi.mocked(chrome.runtime.sendMessage).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(chrome.runtime.openOptionsPage).mockReset().mockResolvedValue(undefined as any);
   vi.mocked(fetch).mockReset();
 }

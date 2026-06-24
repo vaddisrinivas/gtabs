@@ -77,6 +77,8 @@ function sanitizeSettings(input: Partial<Settings>): Settings {
     mergeMode: Boolean(s.mergeMode),
     maxTitleLength: clampNumber(s.maxTitleLength, DEFAULT_SETTINGS.maxTitleLength, 10, 200),
     silentAutoAdd: Boolean(s.silentAutoAdd),
+    enableTabCouncilIntegration: Boolean(s.enableTabCouncilIntegration),
+    tabCouncilExtensionId: typeof s.tabCouncilExtensionId === 'string' ? s.tabCouncilExtensionId.trim() : '',
     autoPinApps: Boolean(s.autoPinApps),
     staleTabThresholdHours: clampNumber(s.staleTabThresholdHours, DEFAULT_SETTINGS.staleTabThresholdHours, 1, 24 * 30),
     enableCorrectionTracking: Boolean(s.enableCorrectionTracking),

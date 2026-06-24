@@ -90,6 +90,7 @@
 | **Duplicate Detection** | Finds tabs with the same URL |
 | **Zero-LLM Fast Routing** | Routes new tabs into existing groups via affinity — no API calls |
 | **Domain Rules** | Hard-wire `github.com` to `Dev`, always, skipping the LLM entirely |
+| **Tab Council Prep** | Optionally gather open AI provider tabs into a `tab-council` group for the separate Tab Council extension |
 
 ### Providers
 

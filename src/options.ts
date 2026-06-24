@@ -35,6 +35,8 @@ const inThreshold = $<HTMLInputElement>('threshold');
 const outThreshold = $<HTMLSpanElement>('thresholdVal');
 const inMergeMode = $<HTMLInputElement>('mergeMode');
 const inSilentAutoAdd = $<HTMLInputElement>('silentAutoAdd');
+const inEnableTabCouncilIntegration = $<HTMLInputElement>('enableTabCouncilIntegration');
+const inTabCouncilExtensionId = $<HTMLInputElement>('tabCouncilExtensionId');
 const inAutoPinApps = $<HTMLInputElement>('autoPinApps');
 const inSmartUngroup = $<HTMLInputElement>('smartUngroup');
 const inStaleTabThresholdHours = $<HTMLInputElement>('staleTabThresholdHours');
@@ -199,6 +201,8 @@ async function save() {
     threshold: Number(inThreshold.value) || DEFAULT_SETTINGS.threshold,
     mergeMode: inMergeMode.checked,
     silentAutoAdd: inSilentAutoAdd.checked,
+    enableTabCouncilIntegration: inEnableTabCouncilIntegration.checked,
+    tabCouncilExtensionId: inTabCouncilExtensionId.value.trim(),
     autoPinApps: inAutoPinApps.checked,
     staleTabThresholdHours: Number(inStaleTabThresholdHours.value) || DEFAULT_SETTINGS.staleTabThresholdHours,
     enableCorrectionTracking: inEnableCorrectionTracking.checked,
@@ -264,6 +268,8 @@ async function load() {
   
   inMergeMode.checked = s.mergeMode;
   inSilentAutoAdd.checked = s.silentAutoAdd;
+  inEnableTabCouncilIntegration.checked = s.enableTabCouncilIntegration;
+  inTabCouncilExtensionId.value = s.tabCouncilExtensionId;
   inAutoPinApps.checked = s.autoPinApps;
   inSmartUngroup.checked = s.smartUngroup;
   
@@ -517,7 +523,7 @@ for (const b of rangeBindings) {
 
 const autoSaveElements = [
   inApiKey, modelSelect, inMaxGroups, inMaxTitleLength, inAutoTrigger, inThreshold,
-  inMergeMode, inSilentAutoAdd, inAutoPinApps, inSmartUngroup, inStaleTabThresholdHours,
+  inMergeMode, inSilentAutoAdd, inEnableTabCouncilIntegration, inTabCouncilExtensionId, inAutoPinApps, inSmartUngroup, inStaleTabThresholdHours,
   inSpendingCapUSD,
   inEnableCorrectionTracking, inEnableRejectionMemory, inEnableGroupDrift,
   inEnablePatternMining, inGroupDriftThreshold,
@@ -589,6 +595,18 @@ $<HTMLButtonElement>('tool-export-md').addEventListener('click', async () => {
   } catch {
     setToolStatus('Clipboard access denied', true);
   }
+});
+
+$<HTMLButtonElement>('tool-tab-council').addEventListener('click', async () => {
+  setToolStatus('Preparing Tab Council...');
+  const res = await sendMsg({ type: 'prepare-tab-council' });
+  if (res?.error) { setToolStatus(res.error, true); return; }
+  const api = res?.tabCouncilApiStatus === 'notified'
+    ? ' Tab Council notified.'
+    : res?.tabCouncilApiStatus === 'unreachable'
+      ? ' Tab Council extension not reachable.'
+      : '';
+  setToolStatus(`Prepared ${res?.count ?? 0} AI tabs in tab-council.${api}`);
 });
 
 $<HTMLButtonElement>('tool-snooze').addEventListener('click', async () => {
