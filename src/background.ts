@@ -57,11 +57,14 @@ const ALARM_NAME = 'gtabs-check';
 const REORG_ALARM_NAME = 'gtabs-reorg';
 const SNOOZE_ALARM_PREFIX = 'gtabs-snooze-';
 const CTX_ADD_TO_GROUP_ID = 'gtabs-add-to-group';
+const CTX_PREPARE_TAB_COUNCIL_ID = 'gtabs-prepare-tab-council';
+export const TAB_COUNCIL_GROUP_NAME = 'tab-council';
 const ACTION_CONTEXT_MENUS: chrome.contextMenus.CreateProperties[] = [
   { id: 'gtabs-organize', title: 'Organize all tabs', contexts: ['action'] },
   { id: 'gtabs-organize-ungrouped', title: 'Organize ungrouped tabs only', contexts: ['action'] },
   { id: 'gtabs-undo', title: 'Undo last grouping', contexts: ['action'] },
   { id: 'gtabs-duplicates', title: 'Find duplicate tabs', contexts: ['action'] },
+  { id: CTX_PREPARE_TAB_COUNCIL_ID, title: 'Prepare Tab Council', contexts: ['action'] },
 ];
 
 // In-memory state (session-only, not persisted)
@@ -84,6 +87,18 @@ const IMPORTANT_APP_PATTERNS = [
   'outlook.office.com',
   'airtable.com',
   'spotify.com',
+] as const;
+const TAB_COUNCIL_PROVIDER_HOSTS = [
+  'chatgpt.com',
+  'chat.openai.com',
+  'claude.ai',
+  'gemini.google.com',
+  'perplexity.ai',
+  'getmerlin.in',
+  'extension.getmerlin.in',
+  'grok.com',
+  'x.com',
+  'x.ai',
 ] as const;
 const MAX_TRACKED_TAB_RELATIONS = 5000;
 
@@ -116,6 +131,14 @@ export function isImportantAppUrl(url: string): boolean {
   const hostname = hostnameFromUrl(url);
   return IMPORTANT_APP_PATTERNS.some(pattern =>
     hostname === pattern || hostname.endsWith(`.${pattern}`),
+  );
+}
+
+export function isTabCouncilProviderUrl(url?: string | null): url is string {
+  if (!isTabUrlAllowed(url)) return false;
+  const hostname = hostnameFromUrl(url);
+  return TAB_COUNCIL_PROVIDER_HOSTS.some(host =>
+    hostname === host || hostname.endsWith(`.${host}`),
   );
 }
 
@@ -257,6 +280,52 @@ export async function getTabs(): Promise<TabInfo[]> {
   return tabs
     .filter(t => t.id !== undefined && isTabUrlAllowed(t.url))
     .map(t => ({ id: t.id!, title: t.title || '', url: t.url! }));
+}
+
+async function notifyTabCouncilExtension(settings: Awaited<ReturnType<typeof getSettings>>, windowId: number): Promise<string> {
+  const extensionId = settings.tabCouncilExtensionId.trim();
+  if (!extensionId) return 'skipped';
+  try {
+    const response = await chrome.runtime.sendMessage(extensionId, {
+      type: 'TC_PREPARE_COUNCIL',
+      payload: { windowId, groupName: TAB_COUNCIL_GROUP_NAME },
+    });
+    return response?.ok === false ? 'error' : 'notified';
+  } catch {
+    return 'unreachable';
+  }
+}
+
+export async function prepareTabCouncil(): Promise<{ groupId: number; count: number; providerCount: number; tabCouncilApiStatus: string }> {
+  const settings = await getSettings();
+  if (!settings.enableTabCouncilIntegration) {
+    throw new Error('Enable Tab Council integration in Settings first');
+  }
+
+  const windowId = await getCurrentWindowId();
+  const tabs = await chrome.tabs.query({ windowId });
+  const councilTabs = tabs.filter((tab): tab is chrome.tabs.Tab & { id: number; url: string } =>
+    tab.id !== undefined && isTabCouncilProviderUrl(tab.url)
+  );
+  if (councilTabs.length < 2) throw new Error('Need at least 2 supported AI provider tabs');
+
+  const groups = await chrome.tabGroups.query({ windowId });
+  const existing = groups.find(group => group.title?.trim().toLowerCase() === TAB_COUNCIL_GROUP_NAME);
+  const tabIds = councilTabs.map(tab => tab.id);
+  const groupId = existing
+    ? await groupTabsSafe(tabIds, existing.id)
+    : await groupTabsSafe(tabIds, undefined, windowId);
+  if (groupId === null) throw new Error('Could not group Tab Council tabs');
+
+  await chrome.tabGroups.update(groupId, {
+    title: TAB_COUNCIL_GROUP_NAME,
+    color: 'blue',
+    collapsed: false,
+  });
+
+  const providerCount = new Set(councilTabs.map(tab => hostnameFromUrl(tab.url))).size;
+  const tabCouncilApiStatus = await notifyTabCouncilExtension(settings, windowId);
+  return { groupId, count: councilTabs.length, providerCount, tabCouncilApiStatus };
 }
 
 export async function snapshotCurrentState(): Promise<UndoSnapshot> {
@@ -924,6 +993,13 @@ chrome.runtime.onMessage.addListener((msg: MessageType, _sender, sendResponse) =
     return true;
   }
 
+  if (msg.type === 'prepare-tab-council') {
+    prepareTabCouncil()
+      .then(result => sendResponse({ type: 'status', status: 'done', ...result }))
+      .catch(error => sendResponse({ type: 'status', status: 'error', error: error instanceof Error ? error.message : String(error) }));
+    return true;
+  }
+
   if (msg.type === 'delete-all-groups') {
     deleteAllTabGroups()
       .then(count => sendResponse({ type: 'status', status: 'done', count }))
@@ -1156,6 +1232,7 @@ chrome.contextMenus?.onClicked?.addListener((info) => {
   if (info.menuItemId === 'gtabs-organize-ungrouped') void organize(true).catch(() => {});
   if (info.menuItemId === 'gtabs-undo') void undoLastGrouping().catch(() => {});
   if (info.menuItemId === 'gtabs-duplicates') void findDuplicateTabs().catch(() => {});
+  if (info.menuItemId === CTX_PREPARE_TAB_COUNCIL_ID) void prepareTabCouncil().catch(() => {});
 
   const menuId = String(info.menuItemId);
   if (menuId === `${CTX_ADD_TO_GROUP_ID}-new` && info.tab?.id !== undefined) {

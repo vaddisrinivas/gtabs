@@ -365,11 +365,17 @@
         <button class="btn-ghost" id="tool-duplicates">🧬 Find Duplicates</button>
         <button class="btn-ghost" id="tool-focus">🎯 Focus Mode</button>
         <button class="btn-ghost" id="tool-sort">🔤 Sort Groups</button>
+        <button class="btn-ghost" id="tool-tab-council">🧠 Prepare Tab Council</button>
         <button class="btn-ghost danger" id="tool-clear">🧹 Clear All Groups</button>
         <button class="btn-ghost" id="tool-export-md">📋 Export Markdown</button>
       </div>
       <div id="tool-status" style="font-size:11px;color:#7c6af5;min-height:16px;font-weight:600;font-family:var(--font-display);margin-bottom:8px"></div>
       <div id="tool-results"></div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
+      <div class="sub-label">🧠 Tab Council</div>
+      <div class="toggle-row"><label class="toggle-switch"><input type="checkbox" id="enableTabCouncilIntegration" /><span class="toggle-slider"></span></label><div class="toggle-row-text"><span>Enable Integration</span><p>Prepare AI provider tabs for the separate Tab Council extension.</p></div></div>
+      <div class="form-group" style="margin-bottom:14px"><label>Tab Council Extension ID <span style="font-weight:400;color:var(--text-dim)">optional</span></label><input type="text" id="tabCouncilExtensionId" placeholder="Extension ID for external API handoff" /></div>
 
       <hr style="border:none;border-top:1px solid var(--border);margin:16px 0" />
       <div class="sub-label">💤 Snooze Active Tab</div>

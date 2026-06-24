@@ -16,7 +16,9 @@ import {
   hostnameFromUrl,
   isGroupedTab,
   isImportantAppUrl,
+  isTabCouncilProviderUrl,
   isTabUrlAllowed,
+  prepareTabCouncil,
   purgeStaleTabs,
   sortCurrentGroupsByDomain,
   snapshotCurrentState, restoreSnapshot, undoLastGrouping,
@@ -54,6 +56,21 @@ describe('isImportantAppUrl', () => {
   it('identifies Jira via atlassian.net subdomain', () => expect(isImportantAppUrl('https://company.atlassian.net/jira')).toBe(true));
   it('does not identify random news sites', () => expect(isImportantAppUrl('https://news.ycombinator.com')).toBe(false));
   it('does not identify random URLs', () => expect(isImportantAppUrl('https://example.com')).toBe(false));
+});
+
+describe('isTabCouncilProviderUrl', () => {
+  it('identifies supported AI provider tabs', () => {
+    expect(isTabCouncilProviderUrl('https://chatgpt.com/c/abc')).toBe(true);
+    expect(isTabCouncilProviderUrl('https://claude.ai/chat/abc')).toBe(true);
+    expect(isTabCouncilProviderUrl('https://gemini.google.com/app')).toBe(true);
+    expect(isTabCouncilProviderUrl('https://www.perplexity.ai/search/test')).toBe(true);
+    expect(isTabCouncilProviderUrl('https://grok.com/chat')).toBe(true);
+  });
+
+  it('rejects non-provider and internal URLs', () => {
+    expect(isTabCouncilProviderUrl('https://example.com')).toBe(false);
+    expect(isTabCouncilProviderUrl('chrome://extensions')).toBe(false);
+  });
 });
 
 describe('isGroupedTab', () => {
@@ -199,6 +216,58 @@ describe('organize', () => {
     vi.mocked(fetch).mockRejectedValue('string error');
     const result = await organize();
     expect(result.error).toBe('Unknown error');
+  });
+});
+
+describe('prepareTabCouncil', () => {
+  it('requires integration to be enabled', async () => {
+    await saveSettings({ ...DEFAULT_SETTINGS, enableTabCouncilIntegration: false });
+    await expect(prepareTabCouncil()).rejects.toThrow('Enable Tab Council integration');
+  });
+
+  it('groups supported AI tabs into a tab-council group', async () => {
+    await saveSettings({ ...DEFAULT_SETTINGS, enableTabCouncilIntegration: true });
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      { id: 1, title: 'ChatGPT', url: 'https://chatgpt.com/c/1', groupId: -1 },
+      { id: 2, title: 'Claude', url: 'https://claude.ai/chat/1', groupId: -1 },
+      { id: 3, title: 'Docs', url: 'https://example.com', groupId: -1 },
+    ] as any);
+    vi.mocked(chrome.tabGroups.query).mockResolvedValue([]);
+    vi.mocked(chrome.tabs.group).mockResolvedValue(77);
+
+    const result = await prepareTabCouncil();
+
+    expect(chrome.tabs.group).toHaveBeenCalledWith({ tabIds: [1, 2], createProperties: { windowId: 1 } });
+    expect(chrome.tabGroups.update).toHaveBeenCalledWith(77, {
+      title: 'tab-council',
+      color: 'blue',
+      collapsed: false,
+    });
+    expect(result.count).toBe(2);
+    expect(result.groupId).toBe(77);
+    expect(result.tabCouncilApiStatus).toBe('skipped');
+  });
+
+  it('notifies Tab Council external API when extension ID is configured', async () => {
+    await saveSettings({
+      ...DEFAULT_SETTINGS,
+      enableTabCouncilIntegration: true,
+      tabCouncilExtensionId: 'abcdefghijklmnopabcdefghijklmnop',
+    });
+    vi.mocked(chrome.tabs.query).mockResolvedValue([
+      { id: 1, title: 'ChatGPT', url: 'https://chatgpt.com/c/1', groupId: -1 },
+      { id: 2, title: 'Claude', url: 'https://claude.ai/chat/1', groupId: -1 },
+    ] as any);
+    vi.mocked(chrome.tabs.group).mockResolvedValue(88);
+    vi.mocked(chrome.runtime.sendMessage).mockResolvedValue({ ok: true } as any);
+
+    const result = await prepareTabCouncil();
+
+    expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+      'abcdefghijklmnopabcdefghijklmnop',
+      { type: 'TC_PREPARE_COUNCIL', payload: { windowId: 1, groupName: 'tab-council' } },
+    );
+    expect(result.tabCouncilApiStatus).toBe('notified');
   });
 });
 
@@ -617,8 +686,8 @@ describe('event listeners', () => {
     it('handles onInstalled', async () => {
       await (chrome.runtime.onInstalled as any).callListeners();
       expect(chrome.alarms.create).toHaveBeenCalled();
-      // 4 action-context menus + Add-to-group parent + New group child
-      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(6);
+      // 5 action-context menus + Add-to-group parent + New group child
+      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(7);
       expect(chrome.contextMenus.removeAll).toHaveBeenCalledOnce();
     });
 
@@ -636,6 +705,7 @@ describe('event listeners', () => {
         'gtabs-organize-ungrouped',
         'gtabs-undo',
         'gtabs-duplicates',
+        'gtabs-prepare-tab-council',
         'gtabs-add-to-group',
         'gtabs-add-to-group-101',
         'gtabs-add-to-group-202',
@@ -657,7 +727,7 @@ describe('event listeners', () => {
 
       await expect((chrome.runtime.onInstalled as any).callListeners()).resolves.toBeDefined();
 
-      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(6);
+      expect(chrome.contextMenus.create).toHaveBeenCalledTimes(7);
       expect(warnSpy).not.toHaveBeenCalled();
       warnSpy.mockRestore();
     });
