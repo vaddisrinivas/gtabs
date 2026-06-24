@@ -3,7 +3,7 @@
   "name": "gTabs - AI Tab Organizer",
   "version": "0.5.1",
   "description": "One-click AI tab organizer with editable suggestions, undo, and local or cloud LLM support",
-  "permissions": ["tabs", "tabGroups", "storage", "alarms", "contextMenus", "windows"],
+  "permissions": ["tabs", "tabGroups", "storage", "alarms", "contextMenus", "windows", "scripting"],
   "host_permissions": [
     "https://api.openai.com/*",
     "https://api.anthropic.com/*",
@@ -11,6 +11,10 @@
     "https://api.groq.com/*",
     "https://api.x.ai/*",
     "http://localhost:11434/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
   ],
   "action": {
     "default_popup": "popup.html",

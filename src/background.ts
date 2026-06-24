@@ -86,6 +86,8 @@ const IMPORTANT_APP_PATTERNS = [
   'spotify.com',
 ] as const;
 const MAX_TRACKED_TAB_RELATIONS = 5000;
+const CONTENT_SIGNAL_ORIGINS = ['http://*/*', 'https://*/*'];
+const MAX_CONTENT_SIGNAL_CHARS = 700;
 
 let autoCheckInFlight = false;
 let lastAutoCheckTime = 0;
@@ -102,6 +104,24 @@ export function isTabUrlAllowed(url?: string | null): url is string {
   if (/^(chrome|edge|about|chrome-extension):\/\//.test(url)) return false;
   if (/^(file|data|blob|about):/.test(url)) return false;
   return true;
+}
+
+export function isContentSignalUrlAllowed(url?: string | null): url is string {
+  if (!isTabUrlAllowed(url)) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+export function sanitizeContentSignal(text: string, maxLen = MAX_CONTENT_SIGNAL_CHARS): string {
+  return text
+    .replace(/[\u0000-\u001F\u007F]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLen);
 }
 
 export function hostnameFromUrl(url: string): string {
@@ -257,6 +277,54 @@ export async function getTabs(): Promise<TabInfo[]> {
   return tabs
     .filter(t => t.id !== undefined && isTabUrlAllowed(t.url))
     .map(t => ({ id: t.id!, title: t.title || '', url: t.url! }));
+}
+
+async function hasContentSignalPermission(): Promise<boolean> {
+  try {
+    return await chrome.permissions.contains({ origins: CONTENT_SIGNAL_ORIGINS });
+  } catch {
+    return false;
+  }
+}
+
+async function extractTabContentSignal(tabId: number): Promise<string | null> {
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const text = (value?: string | null) => (value || '').replace(/\s+/g, ' ').trim();
+        const meta = text(
+          document.querySelector<HTMLMetaElement>('meta[name="description"]')?.content ||
+          document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.content
+        );
+        const headings = Array.from(document.querySelectorAll('h1,h2'))
+          .slice(0, 8)
+          .map(el => text(el.textContent))
+          .filter(Boolean);
+        const bodyParts = Array.from(document.querySelectorAll('main p, article p, p'))
+          .slice(0, 12)
+          .map(el => text(el.textContent))
+          .filter(part => part.length > 20);
+        return [meta, ...headings, ...bodyParts].filter(Boolean).join(' ');
+      },
+    });
+    const raw = results?.[0]?.result;
+    if (typeof raw !== 'string') return null;
+    const sanitized = sanitizeContentSignal(raw);
+    return sanitized.length > 0 ? sanitized : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function enrichTabsWithContentSignals(tabs: TabInfo[]): Promise<TabInfo[]> {
+  if (!tabs.length || !(await hasContentSignalPermission())) return tabs;
+  const enriched = await Promise.all(tabs.map(async tab => {
+    if (!isContentSignalUrlAllowed(tab.url)) return tab;
+    const contentSignal = await extractTabContentSignal(tab.id);
+    return contentSignal ? { ...tab, contentSignal } : tab;
+  }));
+  return enriched;
 }
 
 export async function snapshotCurrentState(): Promise<UndoSnapshot> {
@@ -456,6 +524,9 @@ export async function organize(ungroupedOnly = false): Promise<{ suggestions?: G
     }
 
     const historyHint = summarizeHistory(history);
+    if (settings.enableContentSignals) {
+      tabsForLLM = await enrichTabsWithContentSignals(tabsForLLM);
+    }
     const result = tabsForLLM.length >= 2
       ? await suggest(tabsForLLM, settings, affinity, domainRules, historyHint, extraHints)
       // Keep a single leftover tab ungrouped instead of forcing an "Other" group.

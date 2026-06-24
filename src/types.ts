@@ -69,6 +69,7 @@ export interface TabInfo {
   id: number;
   title: string;
   url: string;
+  contentSignal?: string;
 }
 
 export interface RawGroup {
@@ -99,6 +100,7 @@ export interface Settings extends LLMConfig {
   mergeMode: boolean;
   maxTitleLength: number;
   silentAutoAdd: boolean;
+  enableContentSignals: boolean;
   autoPinApps: boolean;
   staleTabThresholdHours: number;
   // Smart learning
@@ -271,6 +273,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mergeMode: false,
   maxTitleLength: 80,
   silentAutoAdd: false,
+  enableContentSignals: false,
   autoPinApps: false,
   staleTabThresholdHours: 48,
   enableCorrectionTracking: true,

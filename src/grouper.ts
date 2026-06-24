@@ -126,7 +126,7 @@ export function buildPrompt(
   extraHints?: ExtraHints,
 ): string {
   const tabList = tabs.map(t =>
-    `  - id: ${t.id} | "${sanitizeForPrompt(truncateTitle(t.title, maxTitleLength))}" | ${sanitizeForPrompt(t.url)}`
+    `  - id: ${t.id} | "${sanitizeForPrompt(truncateTitle(t.title, maxTitleLength))}" | ${sanitizeForPrompt(t.url)}${t.contentSignal ? ` | content: ${sanitizeForPrompt(t.contentSignal)}` : ''}`
   ).join('\n');
 
   // Use weighted affinity hint if available, otherwise fall back to flat
