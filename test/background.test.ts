@@ -14,10 +14,13 @@ import {
   focusCurrentGroup,
   getTabs, organize, applyGroups, findDuplicateTabs,
   hostnameFromUrl,
+  enrichTabsWithContentSignals,
   isGroupedTab,
+  isContentSignalUrlAllowed,
   isImportantAppUrl,
   isTabUrlAllowed,
   purgeStaleTabs,
+  sanitizeContentSignal,
   sortCurrentGroupsByDomain,
   snapshotCurrentState, restoreSnapshot, undoLastGrouping,
   _resetAutoCheckCooldown,
@@ -36,6 +39,40 @@ describe('isTabUrlAllowed', () => {
   it('blocks null', () => expect(isTabUrlAllowed(null)).toBe(false));
   it('blocks undefined', () => expect(isTabUrlAllowed(undefined)).toBe(false));
   it('blocks empty string', () => expect(isTabUrlAllowed('')).toBe(false));
+});
+
+describe('content signals', () => {
+  it('allows only http and https tabs for content extraction', () => {
+    expect(isContentSignalUrlAllowed('https://example.com')).toBe(true);
+    expect(isContentSignalUrlAllowed('http://example.com')).toBe(true);
+    expect(isContentSignalUrlAllowed('chrome://extensions')).toBe(false);
+    expect(isContentSignalUrlAllowed('file:///tmp/a.html')).toBe(false);
+  });
+
+  it('sanitizes and caps content signals', () => {
+    const raw = `Title\n\n${'x'.repeat(900)}\u0000`;
+    const sanitized = sanitizeContentSignal(raw, 40);
+    expect(sanitized).toHaveLength(40);
+    expect(sanitized).not.toContain('\n');
+    expect(sanitized).not.toContain('\u0000');
+  });
+
+  it('falls back unchanged when content permission is missing', async () => {
+    vi.mocked(chrome.permissions.contains).mockResolvedValue(false);
+    const input: TabInfo[] = [{ id: 1, title: 'A', url: 'https://example.com' }];
+    await expect(enrichTabsWithContentSignals(input)).resolves.toEqual(input);
+    expect(chrome.scripting.executeScript).not.toHaveBeenCalled();
+  });
+
+  it('adds sanitized content signals when permission and content are available', async () => {
+    vi.mocked(chrome.permissions.contains).mockResolvedValue(true);
+    vi.mocked(chrome.scripting.executeScript).mockResolvedValue([{ result: ' Heading\nUseful page summary ' }] as any);
+    const input: TabInfo[] = [{ id: 1, title: 'A', url: 'https://example.com' }];
+
+    await expect(enrichTabsWithContentSignals(input)).resolves.toEqual([
+      { ...input[0], contentSignal: 'Heading Useful page summary' },
+    ]);
+  });
 });
 
 describe('hostnameFromUrl', () => {
@@ -187,6 +224,18 @@ describe('organize', () => {
     await organize();
     // 1 LLM group + 1 "Other" group for unassigned tabs
     expect(chrome.action.setBadgeText).toHaveBeenCalledWith({ text: '2' });
+  });
+
+  it('adds content signals to the LLM prompt when enabled', async () => {
+    await saveSettings({ ...TEST_SETTINGS, enableContentSignals: true });
+    vi.mocked(chrome.permissions.contains).mockResolvedValue(true);
+    vi.mocked(chrome.scripting.executeScript).mockResolvedValue([{ result: 'Repository issue tracker and pull requests' }] as any);
+    mockFetchLLM('[{"name":"Dev","color":"blue","tabIds":[1,2]}]');
+
+    await organize();
+
+    const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+    expect(body.messages[1].content).toContain('content: Repository issue tracker and pull requests');
   });
 
   it('returns error on LLM failure', async () => {

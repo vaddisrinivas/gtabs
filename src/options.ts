@@ -35,6 +35,7 @@ const inThreshold = $<HTMLInputElement>('threshold');
 const outThreshold = $<HTMLSpanElement>('thresholdVal');
 const inMergeMode = $<HTMLInputElement>('mergeMode');
 const inSilentAutoAdd = $<HTMLInputElement>('silentAutoAdd');
+const inEnableContentSignals = $<HTMLInputElement>('enableContentSignals');
 const inAutoPinApps = $<HTMLInputElement>('autoPinApps');
 const inSmartUngroup = $<HTMLInputElement>('smartUngroup');
 const inStaleTabThresholdHours = $<HTMLInputElement>('staleTabThresholdHours');
@@ -66,6 +67,7 @@ const costTable = $<HTMLTableElement>('cost-table');
 const costBody = $<HTMLTableSectionElement>('cost-body');
 
 let currentProvider: ProviderPreset | null = null;
+const CONTENT_SIGNAL_ORIGINS = ['http://*/*', 'https://*/*'];
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -73,6 +75,16 @@ function esc(s: string): string {
 
 function sendMsg(msg: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
   return new Promise(resolve => chrome.runtime.sendMessage(msg, resolve));
+}
+
+async function ensureContentSignalPermission(): Promise<boolean> {
+  try {
+    const permissions = { origins: CONTENT_SIGNAL_ORIGINS };
+    if (await chrome.permissions.contains(permissions)) return true;
+    return await chrome.permissions.request(permissions);
+  } catch {
+    return false;
+  }
 }
 
 // --- Provider Cards ---
@@ -184,6 +196,11 @@ async function save() {
 
   const model = modelSelect.value;
   const baseUrl = p.baseUrl;
+  let enableContentSignals = inEnableContentSignals.checked;
+  if (enableContentSignals) {
+    enableContentSignals = await ensureContentSignalPermission();
+    if (!enableContentSignals) inEnableContentSignals.checked = false;
+  }
 
   // Preserve pinnedGroups from current settings (managed separately)
   const current = await getSettings();
@@ -199,6 +216,7 @@ async function save() {
     threshold: Number(inThreshold.value) || DEFAULT_SETTINGS.threshold,
     mergeMode: inMergeMode.checked,
     silentAutoAdd: inSilentAutoAdd.checked,
+    enableContentSignals,
     autoPinApps: inAutoPinApps.checked,
     staleTabThresholdHours: Number(inStaleTabThresholdHours.value) || DEFAULT_SETTINGS.staleTabThresholdHours,
     enableCorrectionTracking: inEnableCorrectionTracking.checked,
@@ -264,6 +282,7 @@ async function load() {
   
   inMergeMode.checked = s.mergeMode;
   inSilentAutoAdd.checked = s.silentAutoAdd;
+  inEnableContentSignals.checked = s.enableContentSignals;
   inAutoPinApps.checked = s.autoPinApps;
   inSmartUngroup.checked = s.smartUngroup;
   
@@ -517,7 +536,7 @@ for (const b of rangeBindings) {
 
 const autoSaveElements = [
   inApiKey, modelSelect, inMaxGroups, inMaxTitleLength, inAutoTrigger, inThreshold,
-  inMergeMode, inSilentAutoAdd, inAutoPinApps, inSmartUngroup, inStaleTabThresholdHours,
+  inMergeMode, inSilentAutoAdd, inEnableContentSignals, inAutoPinApps, inSmartUngroup, inStaleTabThresholdHours,
   inSpendingCapUSD,
   inEnableCorrectionTracking, inEnableRejectionMemory, inEnableGroupDrift,
   inEnablePatternMining, inGroupDriftThreshold,

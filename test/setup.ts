@@ -90,6 +90,9 @@ export function resetAllMocks() {
   vi.mocked(chrome.action.setBadgeText).mockReset().mockResolvedValue(undefined);
   vi.mocked(chrome.action.setBadgeBackgroundColor).mockReset().mockResolvedValue(undefined);
   vi.mocked(chrome.runtime.openOptionsPage).mockReset().mockResolvedValue(undefined as any);
+  vi.mocked(chrome.permissions.contains).mockReset().mockResolvedValue(true);
+  vi.mocked(chrome.permissions.request).mockReset().mockResolvedValue(true);
+  vi.mocked(chrome.scripting.executeScript).mockReset().mockResolvedValue([]);
   vi.mocked(fetch).mockReset();
 }
 
@@ -128,6 +131,10 @@ let groupIdCounter = 100;
   },
   scripting: {
     executeScript: vi.fn(() => Promise.resolve([])),
+  },
+  permissions: {
+    contains: vi.fn(() => Promise.resolve(true)),
+    request: vi.fn(() => Promise.resolve(true)),
   },
   bookmarks: {
     create: vi.fn(() => Promise.resolve({ id: '123' })),
